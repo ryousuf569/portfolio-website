@@ -60,18 +60,6 @@ const tracks: Track[] = [
       },
     ],
   },
-  {
-    number: 4,
-    title: "Yousuf RSD (Real Spotify)",
-    subtitle:
-      "Self-produced, written, and recorded music. FL Studio, AT2020, Steinberg UR12",
-    links: [
-      {
-        type: "spotify",
-        url: "https://open.spotify.com/artist/46yz0crerAYXpWiSYpkfN7",
-      },
-    ],
-  },
 ];
 
 /* =========================
