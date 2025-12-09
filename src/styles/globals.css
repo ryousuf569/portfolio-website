@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================
+   Root Design Tokens
+   ========================= */
+
+:root {
+  --font-size: 16px;
+
+  /* Core colors */
+  --background: #ffffff;
+  --foreground: #0f0f0f;
+
+  --card: #ffffff;
+  --card-foreground: #0f0f0f;
+
+  --muted: #f3f3f5;
+  --muted-foreground: #717182;
+
+  --accent: #e9ebef;
+  --accent-foreground: #030213;
+
+  --primary: #030213;
+  --primary-foreground: #ffffff;
+
+  --border: rgba(0, 0, 0, 0.1);
+
+  --radius: 0.625rem;
+}
+
+/* =========================
+   Dark Mode Tokens
+   ========================= */
+
+.dark {
+  --background: #121212;
+  --foreground: #ffffff;
+
+  --card: #181818;
+  --card-foreground: #ffffff;
+
+  --muted: #2a2a2a;
+  --muted-foreground: #a1a1aa;
+
+  --accent: #2a2a2a;
+  --accent-foreground: #ffffff;
+
+  --primary: #ffffff;
+  --primary-foreground: #0f0f0f;
+
+  --border: rgba(255, 255, 255, 0.1);
+}
+
+/* =========================
+   Base Styles
+   ========================= */
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-size: var(--font-size);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    margin: 0;
+    padding: 0;
+
+    font-family: system-ui, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* =========================
+   Typography Defaults
+   ========================= */
+
+@layer base {
+  h1 {
+    font-size: 1.875rem; /* text-2xl */
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  h2 {
+    font-size: 1.5rem; /* text-xl */
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  h3 {
+    font-size: 1.25rem; /* text-lg */
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  p {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  button {
+    font-size: 1rem;
+    font-weight: 500;
+  }
+}
