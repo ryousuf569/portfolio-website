@@ -1,5 +1,5 @@
 import { ExternalLink, Github, Linkedin } from 'lucide-react';
-import profilePhoto from "./assets/Yousuf Headshot HQ.jpeg"
+import profilePhoto from "./assets/Yousuf Headshot NEW HQ.png"
 
 export function Header() {
   return (
