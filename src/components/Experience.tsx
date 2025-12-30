@@ -48,7 +48,7 @@ export function Experience() {
             </div>
             
             <a
-              href="https://drive.google.com/file/d/1Gs2oQ-qno2v2D3E3y45PVmTvwD3GSrDN/view?usp=drive_link"
+              href="https://drive.google.com/file/d/1TaGVbuR-O4PZVfVOymT98kVvYE_Oiuxj/view?usp=sharing"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-6 py-3 bg-[#1ed760] text-black rounded-full hover:bg-[#1fdf64] transition-all hover:scale-105"

@@ -40,8 +40,8 @@ const tracks: Track[] = [
   },
   {
     number: 2,
-    title: "MIDI.me (In Progress)",
-    subtitle: "Working on analyzing MIDI and Audio Structure to quantify listener engagement.",
+    title: "MIDI.me",
+    subtitle: "Analyzes Audio Structure to quantify listener engagement. Python, pandas, SQL, numpy, Markov Models",
     links: [
       {
         type: "github",
