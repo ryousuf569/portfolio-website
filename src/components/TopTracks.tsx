@@ -51,6 +51,17 @@ const tracks: Track[] = [
   },
   {
     number: 3,
+    title: "Audio Quality Assurance Engine",
+    subtitle: "A small Audio parsing tool that feeds directly into MIDI.me. Python, C++, MATLAB",
+    links: [
+      {
+        type: "github",
+        url: "https://github.com/ryousuf569/audio-qa-automation",
+      },
+    ],
+  },
+  {
+    number: 4,
     title: "Spotify-Inspired Portfolio Website",
     subtitle: "Code for this Figma-first design, React + TypeScript",
     links: [
