@@ -62,6 +62,17 @@ const tracks: Track[] = [
   },
   {
     number: 4,
+    title: "Skills Canada Robotics Project",
+    subtitle: "Led C++ Programming for a Robotics Competition. Our team is on the left of the video.",
+    links: [
+      {
+        type: "demo",
+        url: "https://drive.google.com/file/d/1oecJ5Wx9IdsVA3BZpV9x0Yq4UDOLVPxq/view?usp=sharing",
+      },
+    ],
+  },
+  {
+    number: 5,
     title: "Spotify-Inspired Portfolio Website",
     subtitle: "Code for this Figma-first design, React + TypeScript",
     links: [
