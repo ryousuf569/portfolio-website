@@ -212,7 +212,7 @@ function drawNpcSprite(img, tx, ty, label) {
   if (img.complete && img.naturalWidth > 0) ctx.drawImage(img, sx, sy, sw, sh);
 
   // Wooden nameplate
-  ctx.font = `bold 7px 'Comic Sans MS', cursive`;
+  ctx.font = `bold 7px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
   const bw = ctx.measureText(label).width + 10;
   const bx = tx + TILE / 2 - bw / 2;
   const by = ty + TILE - 14;
@@ -279,7 +279,7 @@ function drawOfficeBuilding(x, y) {
   ctx.fillStyle = '#0a66c2';
   ctx.fillRect(bx + 2, by + bh + 2, bw - 4, 9);
   ctx.fillStyle = '#fff';
-  ctx.font = `bold 6px 'Comic Sans MS', cursive`;
+  ctx.font = `bold 6px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
   ctx.textAlign = 'center'; ctx.fillText('LinkedIn', bx + bw / 2, by + bh + 9); ctx.textAlign = 'left';
 }
 
@@ -309,7 +309,7 @@ function drawLibrary(x, y) {
   ctx.fillStyle = '#24292e';
   ctx.fillRect(bx + 2, by + bh + 2, bw - 4, 9);
   ctx.fillStyle = '#fff';
-  ctx.font = `bold 6px 'Comic Sans MS', cursive`;
+  ctx.font = `bold 6px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
   ctx.textAlign = 'center'; ctx.fillText('GitHub', bx + bw / 2, by + bh + 9); ctx.textAlign = 'left';
 }
 
@@ -343,7 +343,7 @@ function drawSchool(x, y) {
   ctx.fillStyle = '#4a5aa0';
   ctx.fillRect(bx + 2, by + bh + 2, bw - 4, 9);
   ctx.fillStyle = '#fff';
-  ctx.font = `bold 6px 'Comic Sans MS', cursive`;
+  ctx.font = `bold 6px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
   ctx.textAlign = 'center'; ctx.fillText('Résumé', bx + bw / 2, by + bh + 9); ctx.textAlign = 'left';
 }
 
@@ -379,7 +379,7 @@ function drawBuilding(x, y, key) {
   ctx.fillRect(bx + 2, by + bh - 28, bw - 4, 9);
   ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(bx + 2, by + bh - 28, bw - 4, 9);
   ctx.fillStyle = '#000';
-  ctx.font = `bold 6px 'Comic Sans MS', cursive`;
+  ctx.font = `bold 6px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
   ctx.textAlign = 'center'; ctx.fillText(short[key] || key, bx + bw / 2, by + bh - 21); ctx.textAlign = 'left';
 }
 
@@ -403,8 +403,8 @@ function drawFullPopup(data) {
 
   const pad = Math.round(W * 0.03);
   const titleH = Math.round(H * 0.11);
-  const titleFont = Math.max(8, Math.round(H * 0.055));
-  const bodyFont = Math.max(7, Math.round(H * 0.042));
+  const titleFont = Math.max(12, Math.round(H * 0.055));
+  const bodyFont = Math.max(10, Math.round(H * 0.042));
   const lineGap = Math.round(H * 0.072);
 
   // Helper: wrap text into lines that fit maxW
@@ -442,11 +442,11 @@ function drawFullPopup(data) {
     ctx.fillStyle = '#4a5aa0'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
     rrect(tx, popY + pad, tw, titleH, 5); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#fff';
-    ctx.font = `bold ${titleFont}px 'Comic Sans MS', cursive`;
+    ctx.font = `bold ${titleFont}px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
     ctx.fillText(data.title, tx + 6, popY + pad + titleH * 0.7);
 
     ctx.fillStyle = '#222';
-    ctx.font = `${bodyFont}px 'Comic Sans MS', cursive`;
+    ctx.font = `${bodyFont}px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
     let lineY = popY + pad + titleH + lineGap * 0.5;
     data.lines.forEach(l => {
       wrapText(l, tw - 12).forEach(wl => {
@@ -459,13 +459,13 @@ function drawFullPopup(data) {
     ctx.fillStyle = '#4a5aa0'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
     rrect(popX + pad, popY + pad, popW - pad * 2, titleH, 5); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#fff';
-    ctx.font = `bold ${titleFont}px 'Comic Sans MS', cursive`;
+    ctx.font = `bold ${titleFont}px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
     ctx.textAlign = 'center';
     ctx.fillText(data.title, W / 2, popY + pad + titleH * 0.7);
     ctx.textAlign = 'left';
 
     ctx.fillStyle = '#222';
-    ctx.font = `${bodyFont}px 'Comic Sans MS', cursive`;
+    ctx.font = `${bodyFont}px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
     const maxTW = popW - pad * 2 - 16;
     let lineY = popY + pad + titleH + lineGap * 0.7;
     data.lines.forEach(l => {
@@ -478,8 +478,8 @@ function drawFullPopup(data) {
 
   ctx.restore(); // un-clip
 
-  const smallFont = Math.max(6, Math.round(H * 0.033));
-  ctx.fillStyle = '#999'; ctx.font = `${smallFont}px 'Comic Sans MS', cursive`;
+  const smallFont = Math.max(9, Math.round(H * 0.033));
+  ctx.fillStyle = '#999'; ctx.font = `${smallFont}px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
   ctx.textAlign = 'right';
   ctx.fillText('ESC to close', popX + popW - 10, popY + popH - 6);
   ctx.textAlign = 'left';
@@ -514,9 +514,9 @@ function drawDialog(data) {
   }
   ctx.restore();
 
-  const titleFont = Math.max(8, Math.round(H * 0.045));
-  const bodyFont = Math.max(7, Math.round(H * 0.038));
-  const linkFont = Math.max(6, Math.round(H * 0.035));
+  const titleFont = Math.max(11, Math.round(H * 0.045));
+  const bodyFont = Math.max(10, Math.round(H * 0.038));
+  const linkFont = Math.max(9, Math.round(H * 0.035));
   const dlLineGap = Math.round(H * 0.06);
 
   const tx = portX + ps + 14, tw = dw - ps - 38;
@@ -524,37 +524,37 @@ function drawDialog(data) {
   const titleBarH = Math.round(dh * 0.16);
   rrect(tx, dy + 10, tw, titleBarH, 4); ctx.fill(); ctx.stroke();
   ctx.fillStyle = '#fff';
-  ctx.font = `bold ${titleFont}px 'Comic Sans MS', cursive`;
+  ctx.font = `bold ${titleFont}px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
   ctx.fillText(data.title, tx + 8, dy + 10 + titleBarH * 0.7);
 
   ctx.fillStyle = '#111';
-  ctx.font = `${bodyFont}px 'Comic Sans MS', cursive`;
+  ctx.font = `${bodyFont}px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
   data.lines.forEach((l, i) => ctx.fillText(l, tx + 8, dy + 10 + titleBarH + dlLineGap * 0.6 + i * dlLineGap));
 
   if (data.link) {
     ctx.fillStyle = C.red;
-    ctx.font = `bold ${linkFont}px 'Comic Sans MS', cursive`;
+    ctx.font = `bold ${linkFont}px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
     ctx.fillText('[ C / ENTER — open link ]', tx + 8, dy + dh - 10);
   }
   ctx.fillStyle = '#aaa';
-  ctx.font = `${linkFont}px 'Comic Sans MS', cursive`;
+  ctx.font = `${linkFont}px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
   ctx.textAlign = 'right'; ctx.fillText('ESC to close', dx + dw - 10, dy + dh - 8); ctx.textAlign = 'left';
 }
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
 function drawHUD() {
-  const hudFont = Math.max(7, Math.round(H * 0.04));
-  const hudSmall = Math.max(6, Math.round(H * 0.032));
+  const hudFont = Math.max(10, Math.round(H * 0.04));
+  const hudSmall = Math.max(9, Math.round(H * 0.032));
   ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.strokeStyle = '#444'; ctx.lineWidth = 1.5;
   rrect(8, 8, W * 0.42, hudFont + 14, 4); ctx.fill(); ctx.stroke();
   ctx.fillStyle = '#fff';
-  ctx.font = `bold ${hudFont}px 'Comic Sans MS', cursive`;
+  ctx.font = `bold ${hudFont}px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
   ctx.fillText('South Park, CO', 16, 8 + hudFont + 3);
 
   ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 1;
   rrect(8, H - hudSmall - 18, W * 0.6, hudSmall + 12, 4); ctx.fill();
   ctx.fillStyle = '#bbb';
-  ctx.font = `${hudSmall}px 'Comic Sans MS', cursive`;
+  ctx.font = `${hudSmall}px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
   ctx.fillText('Move: D-pad / WASD  |  A: Talk  | B: Escape |  C: Open Link', 14, H - 12);
 }
 
@@ -596,7 +596,7 @@ function nearbyObj() {
 function drawInteractHint(obj) {
   const label = obj[2] === 'npc' ? 'SPACE to talk' : 'SPACE to enter';
   const tx = obj[0] * TILE, ty = obj[1] * TILE;
-  ctx.font = `bold 7px 'Comic Sans MS', cursive`;
+  ctx.font = `bold 7px 'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', sans-serif`;
   const tw = ctx.measureText(label).width + 10;
   const hx = tx + TILE / 2 - tw / 2;
   const hy = ty - 28;

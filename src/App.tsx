@@ -15,13 +15,22 @@ export default function App() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const mobile = useIsMobile();
 
+  const heldKeys = useRef<Set<string>>(new Set());
+
   const sendKey = useCallback((key: string, type: 'keydown' | 'keyup') => {
+    if (type === 'keydown') heldKeys.current.add(key);
+    else heldKeys.current.delete(key);
     const iframeWin = iframeRef.current?.contentWindow;
     if (!iframeWin) return;
     iframeWin.dispatchEvent(
       new KeyboardEvent(type, { key, code: key, bubbles: true }),
     );
   }, []);
+
+  const releaseAll = useCallback(() => {
+    heldKeys.current.forEach((key) => sendKey(key, 'keyup'));
+    heldKeys.current.clear();
+  }, [sendKey]);
 
   useEffect(() => {
     const forward = (e: KeyboardEvent) => {
@@ -36,13 +45,18 @@ export default function App() {
         }),
       );
     };
+    const onVisChange = () => { if (document.hidden) releaseAll(); };
     window.addEventListener('keydown', forward);
     window.addEventListener('keyup', forward);
+    window.addEventListener('blur', releaseAll);
+    document.addEventListener('visibilitychange', onVisChange);
     return () => {
       window.removeEventListener('keydown', forward);
       window.removeEventListener('keyup', forward);
+      window.removeEventListener('blur', releaseAll);
+      document.removeEventListener('visibilitychange', onVisChange);
     };
-  }, []);
+  }, [releaseAll]);
 
   const dpadDown = (key: string) => (e: React.TouchEvent | React.MouseEvent) => {
     e.preventDefault();
