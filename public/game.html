@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Yousuf's South Park Portfolio</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; font-family: 'Comic Sans MS', 'Chalkboard SE', cursive; touch-action: none; }
+  canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; touch-action: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+const TILE = 48, COLS = 20, ROWS = 15;
+const GW = COLS * TILE;
+const WORLD_SCALE = 1.4;
+
+const PIXEL_SCALE = 1.2; // render at lower res for chunky pixel look
+let W, H;
+function resize() {
+  W = Math.ceil(window.innerWidth / PIXEL_SCALE);
+  H = Math.ceil(window.innerHeight / PIXEL_SCALE);
+  canvas.width = W;
+  canvas.height = H;
+  ctx.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── Palette ───────────────────────────────────────────────────────────────────
+const C = {
+  ground: '#d6dce0', groundAlt: '#c8ced3',
+  road: '#2e2e2e', roadDash: '#f0e040',
+  pine: '#1a5c1a', pineLt: '#2a7a2a',
+  yellow: '#f0d800', red: '#d62020',
+};
+
+// ── PNG sprites ───────────────────────────────────────────────────────────────
+const IMG_STAN    = new Image(); IMG_STAN.src    = 'stan.png';
+const IMG_CARTMAN = new Image(); IMG_CARTMAN.src = 'catman.png';
+const IMG_KYLE    = new Image(); IMG_KYLE.src    = 'kyle.png';
+const IMG_PHOTO   = new Image(); IMG_PHOTO.src   = 'photo.jpg';
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+const RAW = [
+  '2'.repeat(20),
+  '2'.repeat(20),
+  '00000000000000000000',
+  '11111111111111111111',
+  '00000000000000000000',
+  '00000000000000000000',
+  '11111111111111111111',
+  '00000000000000000000',
+  '00000000000000000000',
+  '11111111111111111111',
+  '00000000000000000000',
+  '00000000000000000000',
+  '00000000000000000000',
+  '00000000000000000000',
+  '00000000000000000000',
+];
+const MAP = RAW.map(r => r.split('').map(Number));
+
+// ── Portfolio content ─────────────────────────────────────────────────────────
+const PORTFOLIO = {
+  ABOUT:          { title: 'Yousuf Rashid',  lines: ['1st Year Applied Math with CS/ML @ UWaterloo', 'I specialize in Machine Learning and Data Science', "Lately I've been dipping my toes in Cloud/Backend Dev to be a better MlOps Engineer", 'Go down a couple streets to view my projects!'] },
+  EXPERIENCE:     { title: 'Experience',     lines: ['Incoming MLE @ DeepIDV (S26)', 'ML Researcher @ Wat.AI (Design Team)', 'Many more on the way! (Hopefully)'] },
+  LINKEDIN:       { title: 'LinkedIn',       link: 'https://www.linkedin.com/in/yousuf-rashid-2730122a5/', lines: ['Connect with me!'] },
+  GITHUB:         { title: 'GitHub',         link: 'https://github.com/ryousuf569', lines: ['Check my repos.'] },
+  RESUME:         { title: 'Résumé',         link: 'https://drive.google.com/file/d/17ea8iFYCl4cEXX6BFhmMBG1Ek4zH95wU/view?usp=sharing', lines: ['View PDF'] },
+  NBA_FANTASY:    { title: 'NBA ML',         link: 'https://github.com/ryousuf569/nba-fantasy-ml', lines: ['Predicting player stats', 'XGBoost & FastAPI', 'Sadly Depreciated due to stats.nba.com new guardrails'] },
+  MIDI_ME:        { title: 'MIDI.me',        link: 'https://github.com/ryousuf569/midi-me', lines: ['Markov Chain Music Anaylsis'] },
+  SONARQL:       { title: 'SonarQL',       link: 'https://github.com/ryousuf569/SonarQL', lines: ['Overfit detection on trading strategies'] },
+  PRVN:       { title: 'PRVN',       link: 'https://prvn-league.com/', lines: ['Competitive Lifting Platform'] },
+  PORTFOLIO_SITE: { title: 'This Site',      link: 'https://github.com/ryousuf569/portfolio-website', lines: ['South Park Engine'] },
+};
+
+// ── Objects & blocked tiles ───────────────────────────────────────────────────
+const OBJECTS = [
+  [ 5,  2, 'npc',      'ABOUT'],
+  [13,  2, 'npc',      'EXPERIENCE'],
+  [ 4,  5, 'building', 'LINKEDIN'],
+  [ 9,  5, 'building', 'GITHUB'],
+  [15,  5, 'building', 'RESUME'],
+  [ 3, 10, 'building', 'NBA_FANTASY'],
+  [ 6, 10, 'building', 'MIDI_ME'],
+  [ 9, 10, 'building', 'SONARQL'],
+  [12, 10, 'building', 'PRVN'],
+  [15, 10, 'building', 'PORTFOLIO_SITE'],
+];
+const BLOCKED = new Set(OBJECTS.map(o => `${o[0]},${o[1]}`));
+
+const BLDG_COLOR = {
+  NBA_FANTASY: '#c03030', MIDI_ME: '#3a8a3a',
+  SONARQL: '#2080c0', PRVN: '#d08020', PORTFOLIO_SITE: '#4a5aa0',
+};
+
+// ── Stars ─────────────────────────────────────────────────────────────────────
+const stars = Array.from({ length: 90 }, () => ({
+  x: Math.random() * 2400, y: Math.random() * 900,
+  sz: Math.random() < 0.3 ? 2 : 1,
+  sp: Math.random() * 0.8 + 0.3,
+  phase: Math.random() * Math.PI * 2,
+}));
+
+// ── Falling snow ──────────────────────────────────────────────────────────────
+const snowflakes = Array.from({ length: 45 }, () => ({
+  x: Math.random() * 1600, y: Math.random() * 900,
+  r: Math.random() * 2 + 0.8,
+  sp: Math.random() * 0.3 + 0.1,
+  dr: (Math.random() - 0.5) * 0.15,
+}));
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function rrect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);     ctx.arcTo(x + w, y,     x + w, y + r,     r);
+  ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);     ctx.arcTo(x,     y + h, x,     y + h - r, r);
+  ctx.lineTo(x, y + r);         ctx.arcTo(x,     y,     x + r, y,         r);
+  ctx.closePath();
+}
+
+function darken(hex, f) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `rgb(${~~(r*f)},${~~(g*f)},${~~(b*f)})`;
+}
+
+// ── Background ────────────────────────────────────────────────────────────────
+function drawBackground() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+  const t = Date.now() * 0.001;
+  stars.forEach(s => {
+    const a = 0.25 + 0.55 * Math.sin(t * s.sp + s.phase);
+    ctx.fillStyle = `rgba(255,255,255,${a.toFixed(2)})`;
+    ctx.fillRect(s.x % W, s.y, s.sz, s.sz);
+  });
+}
+
+// ── Ground tiles ──────────────────────────────────────────────────────────────
+function drawGround() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const t = MAP[r][c];
+      if (t === 2) continue; // transparent — black sky shows through
+      if (t === 1) {
+        ctx.fillStyle = C.road;
+        ctx.fillRect(c*TILE, r*TILE, TILE, TILE);
+        if (c % 2 === 0) {
+          ctx.fillStyle = C.roadDash;
+          ctx.fillRect(c*TILE + 8, r*TILE + TILE/2 - 2, TILE - 16, 4);
+        }
+      } else {
+        ctx.fillStyle = (c + r) % 2 === 0 ? C.ground : C.groundAlt;
+        ctx.fillRect(c*TILE, r*TILE, TILE, TILE);
+      }
+    }
+  }
+}
+
+// ── Pine tree ─────────────────────────────────────────────────────────────────
+function drawTree(x, y, sz) {
+  const cx = x + sz / 2;
+  // Trunk
+  ctx.fillStyle = '#5a3520';
+  ctx.fillRect(cx - 3, y + sz * 0.7, 6, sz * 0.3);
+  // Two tiers
+  const tiers = [
+    { ty: y + sz * 0.05, tw: sz * 0.4, th: sz * 0.42 },
+    { ty: y + sz * 0.32, tw: sz * 0.64, th: sz * 0.42 },
+  ];
+  tiers.forEach((tier, i) => {
+    ctx.fillStyle = i === 0 ? C.pine : C.pineLt;
+    ctx.beginPath();
+    ctx.moveTo(cx, tier.ty);
+    ctx.lineTo(cx - tier.tw / 2, tier.ty + tier.th);
+    ctx.lineTo(cx + tier.tw / 2, tier.ty + tier.th);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke();
+  });
+}
+
+const TREE_TILES = [
+  [1,2],[3,2],[7,2],[11,2],[16,2],[18,2],
+  [0,4],[2,5],[19,4],[17,5],
+  [0,7],[2,8],[17,7],[19,8],
+  [0,11],[1,13],[4,12],[7,11],[11,12],[16,13],[18,11],[19,12],
+];
+
+// ── Character sprite rendering ────────────────────────────────────────────────
+function drawNpcSprite(img, tx, ty, label) {
+  const sw = TILE + 4, sh = TILE + 14;
+  const sx = tx + (TILE - sw) / 2;
+  const sy = ty + TILE - sh;
+
+  // Shadow
+  ctx.save();
+  ctx.translate(tx + TILE / 2, ty + TILE - 2);
+  ctx.scale(1, 0.3);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  if (img.complete && img.naturalWidth > 0) ctx.drawImage(img, sx, sy, sw, sh);
+
+  // Wooden nameplate
+  ctx.font = `bold 7px 'Comic Sans MS', cursive`;
+  const bw = ctx.measureText(label).width + 10;
+  const bx = tx + TILE / 2 - bw / 2;
+  const by = ty + TILE - 14;
+  ctx.fillStyle = '#6b3a2a';
+  ctx.fillRect(tx + TILE / 2 - 1, by + 10, 2, 7);
+  ctx.fillStyle = '#b8944c'; ctx.strokeStyle = '#5a3218'; ctx.lineWidth = 1.5;
+  ctx.fillRect(bx, by, bw, 11); ctx.strokeRect(bx, by, bw, 11);
+  ctx.fillStyle = '#2a1000';
+  ctx.textAlign = 'center';
+  ctx.fillText(label, tx + TILE / 2, by + 8);
+  ctx.textAlign = 'left';
+}
+
+function drawPlayerSprite(x, y, moving, walkPhase) {
+  const sw = TILE + 4, sh = TILE + 14;
+  const cx = x + TILE / 2;
+  const cy = y + sh / 2 - 7;
+
+  ctx.save();
+  ctx.translate(cx, y + TILE - 4);
+  ctx.scale(1, 0.3);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (moving) {
+    const phase = walkPhase * 0.2;
+    ctx.rotate(Math.sin(phase) * 0.1);
+    ctx.translate(0, Math.abs(Math.sin(phase)) * -3);
+  }
+  ctx.translate(-sw / 2, -sh / 2);
+  if (IMG_CARTMAN.complete && IMG_CARTMAN.naturalWidth > 0) {
+    ctx.drawImage(IMG_CARTMAN, 0, 0, sw, sh);
+  }
+  ctx.restore();
+}
+
+// ── Object renderers ──────────────────────────────────────────────────────────
+
+// LinkedIn — tall office
+function drawOfficeBuilding(x, y) {
+  const bx = x + 6, by = y - 14, bw = 36, bh = 52;
+  // Body
+  ctx.fillStyle = '#1c3050'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+  ctx.fillRect(bx, by, bw, bh); ctx.strokeRect(bx, by, bw, bh);
+  // Roof
+  ctx.fillStyle = '#0e1e30';
+  ctx.fillRect(bx, by, bw, 5);
+  // Windows — simple bright squares
+  ctx.fillStyle = '#70c8ff';
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 3; col++) {
+      ctx.fillRect(bx + 4 + col * 11, by + 8 + row * 9, 7, 5);
+    }
+  }
+  // Door
+  ctx.fillStyle = '#90d8ff';
+  ctx.fillRect(bx + 12, by + bh - 12, 12, 12);
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+  ctx.strokeRect(bx + 12, by + bh - 12, 12, 12);
+  // Label
+  ctx.fillStyle = '#0a66c2';
+  ctx.fillRect(bx + 2, by + bh + 2, bw - 4, 9);
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold 6px 'Comic Sans MS', cursive`;
+  ctx.textAlign = 'center'; ctx.fillText('LinkedIn', bx + bw / 2, by + bh + 9); ctx.textAlign = 'left';
+}
+
+// GitHub — library
+function drawLibrary(x, y) {
+  const bx = x + 3, by = y - 10, bw = 42, bh = 46;
+  // Body
+  ctx.fillStyle = '#ddd4bc'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+  ctx.fillRect(bx, by + 10, bw, bh - 10); ctx.strokeRect(bx, by + 10, bw, bh - 10);
+  // Pediment
+  ctx.fillStyle = '#ddd4bc';
+  ctx.beginPath(); ctx.moveTo(bx - 1, by + 10); ctx.lineTo(bx + bw / 2, by); ctx.lineTo(bx + bw + 1, by + 10); ctx.closePath();
+  ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.stroke();
+  // Columns
+  ctx.fillStyle = '#ede4cc';
+  ctx.fillRect(bx + 6, by + 10, 4, bh - 20); ctx.fillRect(bx + 19, by + 10, 4, bh - 20); ctx.fillRect(bx + 32, by + 10, 4, bh - 20);
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+  ctx.strokeRect(bx + 6, by + 10, 4, bh - 20); ctx.strokeRect(bx + 19, by + 10, 4, bh - 20); ctx.strokeRect(bx + 32, by + 10, 4, bh - 20);
+  // Door
+  ctx.fillStyle = '#3a2a18';
+  ctx.fillRect(bx + 16, by + bh - 14, 10, 14);
+  ctx.beginPath(); ctx.arc(bx + 21, by + bh - 14, 5, Math.PI, 0); ctx.fill();
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(bx + 16, by + bh - 14, 10, 14);
+  ctx.beginPath(); ctx.arc(bx + 21, by + bh - 14, 5, Math.PI, 0); ctx.stroke();
+  // Label
+  ctx.fillStyle = '#24292e';
+  ctx.fillRect(bx + 2, by + bh + 2, bw - 4, 9);
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold 6px 'Comic Sans MS', cursive`;
+  ctx.textAlign = 'center'; ctx.fillText('GitHub', bx + bw / 2, by + bh + 9); ctx.textAlign = 'left';
+}
+
+// Resume — school
+function drawSchool(x, y) {
+  const bx = x + 2, by = y - 8, bw = 44, bh = 44;
+  // Body
+  ctx.fillStyle = '#a04828'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+  ctx.fillRect(bx, by + 10, bw, bh - 10); ctx.strokeRect(bx, by + 10, bw, bh - 10);
+  // Tower
+  ctx.fillStyle = '#8a3820';
+  ctx.fillRect(bx + 16, by + 2, 12, 10);
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.strokeRect(bx + 16, by + 2, 12, 10);
+  // Roof peak
+  ctx.fillStyle = '#6a2818';
+  ctx.beginPath(); ctx.moveTo(bx + 15, by + 2); ctx.lineTo(bx + 22, by - 6); ctx.lineTo(bx + 29, by + 2); ctx.closePath();
+  ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke();
+  // Flag
+  ctx.strokeStyle = '#666'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(bx + 22, by - 6); ctx.lineTo(bx + 22, by - 16); ctx.stroke();
+  ctx.fillStyle = C.red;
+  ctx.beginPath(); ctx.moveTo(bx + 22, by - 16); ctx.lineTo(bx + 29, by - 13); ctx.lineTo(bx + 22, by - 10); ctx.closePath(); ctx.fill();
+  // Windows
+  ctx.fillStyle = '#ffe880';
+  for (let i = 0; i < 4; i++) ctx.fillRect(bx + 3 + i * 11, by + 14, 6, 6);
+  // Door
+  ctx.fillStyle = '#4a2810';
+  ctx.fillRect(bx + 17, by + bh - 12, 10, 12);
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(bx + 17, by + bh - 12, 10, 12);
+  // Label
+  ctx.fillStyle = '#4a5aa0';
+  ctx.fillRect(bx + 2, by + bh + 2, bw - 4, 9);
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold 6px 'Comic Sans MS', cursive`;
+  ctx.textAlign = 'center'; ctx.fillText('Résumé', bx + bw / 2, by + bh + 9); ctx.textAlign = 'left';
+}
+
+// Generic project building — clean block
+function drawBuilding(x, y, key) {
+  if (key === 'LINKEDIN') { drawOfficeBuilding(x, y); return; }
+  if (key === 'GITHUB')   { drawLibrary(x, y); return; }
+  if (key === 'RESUME')   { drawSchool(x, y); return; }
+  const color = BLDG_COLOR[key] || '#666';
+  const bw = 42, bh = 48, bx = x + 3, by = y + 4;
+  // Body
+  ctx.fillStyle = color; ctx.strokeStyle = '#000'; ctx.lineWidth = 2.5;
+  ctx.fillRect(bx, by, bw, bh); ctx.strokeRect(bx, by, bw, bh);
+  // Roof
+  ctx.fillStyle = darken(color, 0.6);
+  ctx.fillRect(bx, by, bw, 6);
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.strokeRect(bx, by, bw, 6);
+  // Windows (2)
+  ctx.fillStyle = '#ffe880';
+  ctx.fillRect(bx + 5, by + 10, 10, 8); ctx.fillRect(bx + 27, by + 10, 10, 8);
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+  ctx.strokeRect(bx + 5, by + 10, 10, 8); ctx.strokeRect(bx + 27, by + 10, 10, 8);
+  // Door
+  ctx.fillStyle = darken(color, 0.4);
+  ctx.fillRect(bx + 16, by + bh - 16, 10, 16);
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.strokeRect(bx + 16, by + bh - 16, 10, 16);
+  // Knob
+  ctx.fillStyle = C.yellow;
+  ctx.beginPath(); ctx.arc(bx + 24, by + bh - 8, 1.5, 0, Math.PI * 2); ctx.fill();
+  // Label
+  const short = { NBA_FANTASY:'NBA ML', MIDI_ME:'MIDI.me', SONARQL:'SONARQL', PRVN:'PRVN', PORTFOLIO_SITE:'Portfolio' };
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(bx + 2, by + bh - 28, bw - 4, 9);
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(bx + 2, by + bh - 28, bw - 4, 9);
+  ctx.fillStyle = '#000';
+  ctx.font = `bold 6px 'Comic Sans MS', cursive`;
+  ctx.textAlign = 'center'; ctx.fillText(short[key] || key, bx + bw / 2, by + bh - 21); ctx.textAlign = 'left';
+}
+
+// ── Full-screen popup (About / Experience) ────────────────────────────────────
+function drawFullPopup(data) {
+  ctx.fillStyle = 'rgba(0,0,0,0.8)';
+  ctx.fillRect(0, 0, W, H);
+
+  const popW = Math.min(W * 0.92, W - 16);
+  const popH = Math.min(H * 0.88, H - 16);
+  const popX = (W - popW) / 2;
+  const popY = (H - popH) / 2;
+
+  // Panel
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
+  rrect(popX, popY, popW, popH, 8); ctx.fill(); ctx.stroke();
+
+  // Clip everything to popup bounds
+  ctx.save();
+  ctx.beginPath(); ctx.rect(popX, popY, popW, popH); ctx.clip();
+
+  const pad = Math.round(W * 0.03);
+  const titleH = Math.round(H * 0.11);
+  const titleFont = Math.max(8, Math.round(H * 0.055));
+  const bodyFont = Math.max(7, Math.round(H * 0.042));
+  const lineGap = Math.round(H * 0.072);
+
+  // Helper: wrap text into lines that fit maxW
+  function wrapText(text, maxW) {
+    const words = text.split(' ');
+    const lines = []; let cur = '';
+    words.forEach(w => {
+      const test = cur ? cur + ' ' + w : w;
+      if (ctx.measureText(test).width > maxW && cur) { lines.push(cur); cur = w; }
+      else cur = test;
+    });
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  if (data._key === 'ABOUT') {
+    // Image takes up ~40% of popup width
+    const imgSize = Math.min(popH - pad * 2, popW * 0.38);
+    const imgX = popX + pad, imgY = popY + pad;
+    ctx.fillStyle = '#e4eaf0'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+    ctx.fillRect(imgX, imgY, imgSize, imgSize); ctx.strokeRect(imgX, imgY, imgSize, imgSize);
+    if (IMG_PHOTO.complete && IMG_PHOTO.naturalWidth > 0) {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(imgX, imgY, imgSize, imgSize); ctx.clip();
+      const iw = IMG_PHOTO.naturalWidth, ih = IMG_PHOTO.naturalHeight;
+      const scale = Math.max(imgSize / iw, imgSize / ih);
+      const dw = iw * scale, dh = ih * scale;
+      ctx.drawImage(IMG_PHOTO, imgX + (imgSize - dw) / 2, imgY + (imgSize - dh) / 2, dw, dh);
+      ctx.restore();
+    }
+
+    const tx = imgX + imgSize + pad;
+    const tw = popX + popW - tx - pad;
+
+    ctx.fillStyle = '#4a5aa0'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+    rrect(tx, popY + pad, tw, titleH, 5); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${titleFont}px 'Comic Sans MS', cursive`;
+    ctx.fillText(data.title, tx + 6, popY + pad + titleH * 0.7);
+
+    ctx.fillStyle = '#222';
+    ctx.font = `${bodyFont}px 'Comic Sans MS', cursive`;
+    let lineY = popY + pad + titleH + lineGap * 0.5;
+    data.lines.forEach(l => {
+      wrapText(l, tw - 12).forEach(wl => {
+        ctx.fillText(wl, tx + 6, lineY);
+        lineY += lineGap;
+      });
+    });
+
+  } else {
+    ctx.fillStyle = '#4a5aa0'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+    rrect(popX + pad, popY + pad, popW - pad * 2, titleH, 5); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${titleFont}px 'Comic Sans MS', cursive`;
+    ctx.textAlign = 'center';
+    ctx.fillText(data.title, W / 2, popY + pad + titleH * 0.7);
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = '#222';
+    ctx.font = `${bodyFont}px 'Comic Sans MS', cursive`;
+    const maxTW = popW - pad * 2 - 16;
+    let lineY = popY + pad + titleH + lineGap * 0.7;
+    data.lines.forEach(l => {
+      wrapText('- ' + l, maxTW).forEach(wl => {
+        ctx.fillText(wl, popX + pad + 8, lineY);
+        lineY += lineGap;
+      });
+    });
+  }
+
+  ctx.restore(); // un-clip
+
+  const smallFont = Math.max(6, Math.round(H * 0.033));
+  ctx.fillStyle = '#999'; ctx.font = `${smallFont}px 'Comic Sans MS', cursive`;
+  ctx.textAlign = 'right';
+  ctx.fillText('ESC to close', popX + popW - 10, popY + popH - 6);
+  ctx.textAlign = 'left';
+}
+
+// ── Dialog box ────────────────────────────────────────────────────────────────
+function drawDialog(data) {
+  const dh = Math.round(H * 0.42);
+  const dw = Math.min(W * 0.82, W - 30);
+  const dx = (W - dw) / 2;
+  const dy = (H - dh) / 2;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
+  rrect(dx, dy, dw, dh, 6); ctx.fill(); ctx.stroke();
+
+  // Portrait
+  const ps = Math.round(dh * 0.6), portX = dx + 10, portY = dy + Math.round(dh * 0.18);
+  ctx.fillStyle = '#e4eaf0'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+  ctx.fillRect(portX, portY, ps, ps); ctx.strokeRect(portX, portY, ps, ps);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(portX, portY, ps, ps); ctx.clip();
+  const portraitImg = data._key === 'ABOUT' ? IMG_STAN : data._key === 'EXPERIENCE' ? IMG_KYLE : null;
+  if (portraitImg && portraitImg.complete && portraitImg.naturalWidth > 0) {
+    ctx.drawImage(portraitImg, portX, portY, ps, ps);
+  } else if (!portraitImg) {
+    ctx.fillStyle = C.yellow;
+    ctx.save(); ctx.translate(portX + ps / 2, portY + ps / 2); ctx.rotate(Math.PI / 4);
+    ctx.fillRect(-18, -18, 36, 36); ctx.restore();
+  }
+  ctx.restore();
+
+  const titleFont = Math.max(8, Math.round(H * 0.045));
+  const bodyFont = Math.max(7, Math.round(H * 0.038));
+  const linkFont = Math.max(6, Math.round(H * 0.035));
+  const dlLineGap = Math.round(H * 0.06);
+
+  const tx = portX + ps + 14, tw = dw - ps - 38;
+  ctx.fillStyle = '#4a5aa0'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+  const titleBarH = Math.round(dh * 0.16);
+  rrect(tx, dy + 10, tw, titleBarH, 4); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${titleFont}px 'Comic Sans MS', cursive`;
+  ctx.fillText(data.title, tx + 8, dy + 10 + titleBarH * 0.7);
+
+  ctx.fillStyle = '#111';
+  ctx.font = `${bodyFont}px 'Comic Sans MS', cursive`;
+  data.lines.forEach((l, i) => ctx.fillText(l, tx + 8, dy + 10 + titleBarH + dlLineGap * 0.6 + i * dlLineGap));
+
+  if (data.link) {
+    ctx.fillStyle = C.red;
+    ctx.font = `bold ${linkFont}px 'Comic Sans MS', cursive`;
+    ctx.fillText('[ C / ENTER — open link ]', tx + 8, dy + dh - 10);
+  }
+  ctx.fillStyle = '#aaa';
+  ctx.font = `${linkFont}px 'Comic Sans MS', cursive`;
+  ctx.textAlign = 'right'; ctx.fillText('ESC to close', dx + dw - 10, dy + dh - 8); ctx.textAlign = 'left';
+}
+
+// ── HUD ───────────────────────────────────────────────────────────────────────
+function drawHUD() {
+  const hudFont = Math.max(7, Math.round(H * 0.04));
+  const hudSmall = Math.max(6, Math.round(H * 0.032));
+  ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.strokeStyle = '#444'; ctx.lineWidth = 1.5;
+  rrect(8, 8, W * 0.42, hudFont + 14, 4); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${hudFont}px 'Comic Sans MS', cursive`;
+  ctx.fillText('South Park, CO', 16, 8 + hudFont + 3);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 1;
+  rrect(8, H - hudSmall - 18, W * 0.6, hudSmall + 12, 4); ctx.fill();
+  ctx.fillStyle = '#bbb';
+  ctx.font = `${hudSmall}px 'Comic Sans MS', cursive`;
+  ctx.fillText('Move: D-pad / WASD  |  A: Talk  | B: Escape |  C: Open Link', 14, H - 12);
+}
+
+// ── Game state ────────────────────────────────────────────────────────────────
+let px = 9 * TILE, py = 6 * TILE;
+let vx = 0, vy = 0, dir = 'down', dialogData = null;
+let walkPhase = 0, isMoving = false;
+const keys = {};
+
+window.addEventListener('keydown', e => {
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  keys[e.key] = true;
+  if (e.key === ' ') {
+    const o = nearbyObj();
+    if (o) dialogData = { ...PORTFOLIO[o[3]], _key: o[3] };
+  }
+  if ((e.key === 'Enter' || e.key === 'c' || e.key === 'C') && dialogData && dialogData.link) window.open(dialogData.link, '_blank');
+  if (e.key === 'Escape' && dialogData) dialogData = null;
+});
+window.addEventListener('keyup',  e => { keys[e.key] = false; });
+window.addEventListener('blur',   () => { for (const k in keys) delete keys[k]; });
+
+function walkable(c, r) { return r >= 0 && r < ROWS && c >= 0 && c < COLS && !BLOCKED.has(`${c},${r}`); }
+function canMoveTo(wx, wy) {
+  const cx = wx + TILE / 2, cy = wy + TILE * 0.8;
+  return walkable(Math.floor(cx / TILE), Math.floor(cy / TILE));
+}
+function nearbyObj() {
+  const pc = Math.floor((px + 24) / TILE), pr = Math.floor((py + 32) / TILE);
+  const facing = { left:[-1,0], right:[1,0], up:[0,-1], down:[0,1] }[dir];
+  const allDirs = [facing, [-1,0],[1,0],[0,-1],[0,1]];
+  for (const [dc, dr] of allDirs) {
+    const o = OBJECTS.find(o => o[0] === pc + dc && o[1] === pr + dr);
+    if (o) return o;
+  }
+  return null;
+}
+
+function drawInteractHint(obj) {
+  const label = obj[2] === 'npc' ? 'SPACE to talk' : 'SPACE to enter';
+  const tx = obj[0] * TILE, ty = obj[1] * TILE;
+  ctx.font = `bold 7px 'Comic Sans MS', cursive`;
+  const tw = ctx.measureText(label).width + 10;
+  const hx = tx + TILE / 2 - tw / 2;
+  const hy = ty - 28;
+  // Bubble
+  ctx.fillStyle = C.yellow; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+  rrect(hx, hy, tw, 14, 3); ctx.fill(); ctx.stroke();
+  // Tail
+  ctx.fillStyle = C.yellow;
+  ctx.beginPath();
+  ctx.moveTo(tx + TILE / 2 - 3, hy + 14);
+  ctx.lineTo(tx + TILE / 2 + 3, hy + 14);
+  ctx.lineTo(tx + TILE / 2, hy + 19);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(tx + TILE / 2 - 3, hy + 14);
+  ctx.lineTo(tx + TILE / 2, hy + 19);
+  ctx.lineTo(tx + TILE / 2 + 3, hy + 14);
+  ctx.stroke();
+  // Text
+  ctx.fillStyle = '#000'; ctx.textAlign = 'center';
+  ctx.fillText(label, tx + TILE / 2, hy + 10);
+  ctx.textAlign = 'left';
+}
+
+// ── Main loop ─────────────────────────────────────────────────────────────────
+function loop() {
+  snowflakes.forEach(s => {
+    s.y += s.sp; s.x += s.dr;
+    if (s.y > H + 10) s.y = -10;
+    if (s.x > W + 10) s.x = -10;
+    if (s.x < -10)    s.x = W + 10;
+  });
+
+  if (!dialogData) {
+    vx = 0; vy = 0;
+    if      (keys.ArrowLeft  || keys.a) { vx = -3; dir = 'left'; }
+    else if (keys.ArrowRight || keys.d) { vx =  3; dir = 'right'; }
+    if      (keys.ArrowUp    || keys.w) { vy = -3; dir = 'up'; }
+    else if (keys.ArrowDown  || keys.s) { vy =  3; dir = 'down'; }
+    if (canMoveTo(px + vx, py)) px += vx;
+    if (canMoveTo(px, py + vy)) py += vy;
+  }
+
+  isMoving = (vx !== 0 || vy !== 0);
+  if (isMoving) walkPhase++;
+
+  // Background
+  drawBackground();
+
+  // World
+  ctx.save();
+  ctx.translate(W / 2 - (px + 24) * WORLD_SCALE, H / 2 - (py + 32) * WORLD_SCALE);
+  ctx.scale(WORLD_SCALE, WORLD_SCALE);
+
+  drawGround();
+
+  TREE_TILES.forEach(([tc, tr]) => {
+    if (!BLOCKED.has(`${tc},${tr}`)) drawTree(tc * TILE, tr * TILE, TILE);
+  });
+
+  OBJECTS.forEach(o => {
+    if (o[2] === 'npc') {
+      const img = o[3] === 'ABOUT' ? IMG_STAN : IMG_KYLE;
+      const label = o[3] === 'ABOUT' ? 'About' : 'Experience';
+      drawNpcSprite(img, o[0] * TILE, o[1] * TILE, label);
+    } else {
+      drawBuilding(o[0] * TILE, o[1] * TILE, o[3]);
+    }
+  });
+
+  if (!dialogData) {
+    const hint = nearbyObj();
+    if (hint) drawInteractHint(hint);
+  }
+
+  drawPlayerSprite(px, py, isMoving, walkPhase);
+
+  ctx.restore();
+
+  // Snow
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  snowflakes.forEach(s => { ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill(); });
+
+  if (dialogData) {
+    if (dialogData._key === 'ABOUT' || dialogData._key === 'EXPERIENCE') {
+      drawFullPopup(dialogData);
+    } else {
+      drawDialog(dialogData);
+    }
+  }
+  drawHUD();
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

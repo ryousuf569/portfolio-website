@@ -8,7 +8,7 @@ export function Header() {
       <div className="h-80 bg-gradient-to-b from-[#2a2a2a] to-transparent relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(29,185,84,0.1),transparent_50%)]" />
       </div>
-      
+
       {/* Content overlay */}
       <div className="max-w-7xl mx-auto px-6">
         <div className="relative -mt-32">
@@ -21,7 +21,7 @@ export function Header() {
                   className="w-full h-full rounded-full object-cover"
                   />
               </div>
-            
+
             {/* Info section */}
             <div className="pb-6 flex-1">
               <div className="mb-4">
@@ -31,12 +31,12 @@ export function Header() {
               </div>
               <h1 className="text-8xl mb-6 tracking-tight">Yousuf Rashid</h1>
               <p className="text-xl text-gray-300 mb-6">
-                Interests: Backend Development · Machine Learning · Data Analysis · Computational Mathematics 
+                Interests: Backend Development · Machine Learning · Data Analysis · Computational Mathematics
               </p>
-              
+
               {/* Action buttons */}
               <div className="flex gap-3">
-                <a 
+                <a
                   href="https://drive.google.com/file/d/17ea8iFYCl4cEXX6BFhmMBG1Ek4zH95wU/view?usp=sharing"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -45,7 +45,7 @@ export function Header() {
                   <ExternalLink size={18} />
                   View Resume
                 </a>
-                <a 
+                <a
                   href="https://github.com/ryousuf569"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -54,7 +54,7 @@ export function Header() {
                   <Github size={18} />
                   GitHub
                 </a>
-                <a 
+                <a
                   href="https://www.linkedin.com/in/yousuf-rashid-2730122a5/"
                   target="_blank"
                   rel="noopener noreferrer"
