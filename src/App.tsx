@@ -83,7 +83,7 @@ export default function App() {
         {/* Speaker grille */}
         <div style={s.topBar}>
           <div style={s.grille}>
-            {Array.from({ length: 6 }).map((_, i) => (
+            {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} style={s.grilleSlot} />
             ))}
           </div>
@@ -109,6 +109,7 @@ export default function App() {
           <div style={s.dpad}>
             <div style={{ ...s.dpadArm, ...s.dpadV }} />
             <div style={{ ...s.dpadArm, ...s.dpadH }} />
+            <div style={s.dpadCenter} />
             <div style={s.dpadUp}
               onTouchStart={dpadDown('ArrowUp')} onTouchEnd={dpadUp('ArrowUp')} onTouchCancel={dpadUp('ArrowUp')}
               onMouseDown={dpadDown('ArrowUp')} onMouseUp={dpadUp('ArrowUp')} onMouseLeave={dpadUp('ArrowUp')}>
@@ -132,15 +133,15 @@ export default function App() {
           </div>
 
           <div style={s.buttons}>
-            <div style={{ ...s.btn, background: '#c42b3e' }}
+            <div style={{ ...s.btn, ...s.btnA }}
               onTouchStart={btnTap(' ')} onMouseDown={btnTap(' ')}>
               <span style={s.btnLabel}>A</span>
             </div>
-            <div style={{ ...s.btn, background: '#2b6ec4' }}
+            <div style={{ ...s.btn, ...s.btnB }}
               onTouchStart={btnTap('Escape')} onMouseDown={btnTap('Escape')}>
               <span style={s.btnLabel}>B</span>
             </div>
-            <div style={{ ...s.btn, background: '#2ba84a' }}
+            <div style={{ ...s.btn, ...s.btnC }}
               onTouchStart={btnTap('c')} onMouseDown={btnTap('c')}>
               <span style={s.btnLabel}>C</span>
             </div>
@@ -167,52 +168,73 @@ const noSelect: React.CSSProperties = {
 } as any;
 
 /* ═══════════════════════════════════════════════════════════
-   DESKTOP — wide DS layout (original)
+   DESKTOP — wide DS layout
+   Deep indigo shell with warm amber accents, sculpted plastic
    ═══════════════════════════════════════════════════════════ */
 
-const D_DPAD = 'min(18vw, 76px)';
+const D_DPAD = 'min(18vw, 80px)';
 const D_DPAD_ZONE = `calc(${D_DPAD} * 0.4)`;
 
 const desktopStyles: Record<string, React.CSSProperties> = {
   page: {
     width: '100vw', height: '100dvh',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: '#0a0a0f', overflow: 'hidden',
+    background: 'radial-gradient(ellipse at 50% 40%, #0f1018 0%, #060608 100%)',
+    overflow: 'hidden',
   },
   console: {
-    width: '96vw', maxWidth: 900, maxHeight: '98dvh',
-    background: 'linear-gradient(170deg, #2a2a30 0%, #1a1a20 100%)',
-    borderRadius: 'min(24px, 3vw)',
-    padding: 'min(1.2vh, 10px) 0',
+    width: '96vw', maxWidth: 920, maxHeight: '98dvh',
+    background: 'linear-gradient(168deg, #2c3052 0%, #1e2240 40%, #171a30 100%)',
+    borderRadius: 'min(28px, 3vw)',
+    padding: 'min(1.4vh, 12px) 0',
     display: 'flex', flexDirection: 'column', alignItems: 'center',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)',
-    border: '2px solid #333', position: 'relative',
+    boxShadow: `
+      0 2px 0 0 rgba(255,255,255,0.08) inset,
+      0 -1px 0 0 rgba(0,0,0,0.4) inset,
+      0 12px 40px rgba(0,0,0,0.7),
+      0 2px 8px rgba(0,0,0,0.5)
+    `,
+    border: '1.5px solid rgba(255,255,255,0.06)',
+    position: 'relative',
     userSelect: 'none', overflow: 'hidden',
   },
   topBar: {
     width: '100%', display: 'flex', justifyContent: 'center',
     marginBottom: 'min(1vh, 8px)',
+    padding: '0 min(3vw, 28px)',
   },
-  grille: { display: 'flex', gap: 4 },
+  grille: { display: 'flex', gap: 5, alignItems: 'center' },
   grilleSlot: {
-    width: 18, height: 3, borderRadius: 1,
-    background: '#111', boxShadow: 'inset 0 1px 1px rgba(0,0,0,0.6)',
+    width: 20, height: 2.5, borderRadius: 2,
+    background: 'linear-gradient(180deg, #0d0f1a 0%, #181c30 100%)',
+    boxShadow: 'inset 0 1px 1px rgba(0,0,0,0.8), 0 0.5px 0 rgba(255,255,255,0.04)',
   },
   bezel: {
-    width: '94%', background: '#111', borderRadius: 10,
-    padding: 'min(12px, 1.5vw)', position: 'relative',
-    boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.04)',
+    width: '93%',
+    background: 'linear-gradient(180deg, #0a0c16 0%, #0e1020 50%, #0a0c16 100%)',
+    borderRadius: 'min(14px, 1.5vw)',
+    padding: 'min(14px, 1.8vw)',
+    position: 'relative',
+    boxShadow: `
+      inset 0 3px 10px rgba(0,0,0,0.9),
+      inset 0 -1px 4px rgba(0,0,0,0.5),
+      0 1px 0 rgba(255,255,255,0.05)
+    `,
+    border: '1px solid rgba(0,0,0,0.4)',
   },
   led: {
-    position: 'absolute', top: 6, left: 16,
-    width: 6, height: 6, borderRadius: '50%',
-    background: '#2d2', boxShadow: '0 0 6px #2d2',
+    position: 'absolute', top: 8, left: 18,
+    width: 7, height: 7, borderRadius: '50%',
+    background: 'radial-gradient(circle at 35% 35%, #5eff5e, #1aaa1a 60%, #0a6e0a)',
+    boxShadow: '0 0 8px rgba(50,220,50,0.6), 0 0 3px rgba(50,220,50,0.9), inset 0 -1px 1px rgba(0,0,0,0.3)',
   },
   screenWrap: {
     position: 'relative', width: '100%',
     aspectRatio: '16 / 10', maxHeight: '60dvh',
-    overflow: 'hidden', borderRadius: 4,
+    overflow: 'hidden', borderRadius: 6,
     imageRendering: 'pixelated',
+    boxShadow: 'inset 0 0 20px rgba(0,0,0,0.6), 0 0 1px rgba(255,255,255,0.1)',
+    border: '1px solid rgba(0,0,0,0.6)',
   },
   iframe: {
     width: '100%', height: '100%', border: 'none', display: 'block',
@@ -220,27 +242,44 @@ const desktopStyles: Record<string, React.CSSProperties> = {
   },
   scanlines: {
     position: 'absolute', inset: 0, pointerEvents: 'none',
-    backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px)',
-    mixBlendMode: 'multiply' as any, borderRadius: 4,
+    backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px)',
+    mixBlendMode: 'multiply' as any, borderRadius: 6,
   },
   controls: {
-    width: '94%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    padding: 'min(1.8vh, 14px) min(28px, 4vw) min(0.6vh, 4px)',
+    width: '93%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: 'min(2vh, 16px) min(28px, 4vw) min(0.6vh, 4px)',
   },
   dpad: {
     width: D_DPAD, height: D_DPAD, position: 'relative', touchAction: 'none',
   },
   dpadArm: {
-    position: 'absolute', background: '#222', borderRadius: 3,
-    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5)', pointerEvents: 'none' as any,
+    position: 'absolute',
+    background: 'linear-gradient(180deg, #1a1e38 0%, #141830 50%, #10132a 100%)',
+    borderRadius: 4,
+    boxShadow: `
+      inset 0 1px 2px rgba(0,0,0,0.6),
+      inset 0 -1px 1px rgba(255,255,255,0.03),
+      0 1px 3px rgba(0,0,0,0.4)
+    `,
+    pointerEvents: 'none' as any,
   },
   dpadV: {
-    width: `calc(${D_DPAD} * 0.31)`, height: D_DPAD,
-    left: `calc(${D_DPAD} * 0.345)`, top: 0,
+    width: `calc(${D_DPAD} * 0.33)`, height: D_DPAD,
+    left: `calc(${D_DPAD} * 0.335)`, top: 0,
   },
   dpadH: {
-    width: D_DPAD, height: `calc(${D_DPAD} * 0.31)`,
-    left: 0, top: `calc(${D_DPAD} * 0.345)`,
+    width: D_DPAD, height: `calc(${D_DPAD} * 0.33)`,
+    left: 0, top: `calc(${D_DPAD} * 0.335)`,
+  },
+  dpadCenter: {
+    position: 'absolute',
+    width: `calc(${D_DPAD} * 0.2)`, height: `calc(${D_DPAD} * 0.2)`,
+    left: `calc(${D_DPAD} * 0.4)`, top: `calc(${D_DPAD} * 0.4)`,
+    borderRadius: '50%',
+    background: 'radial-gradient(circle at 40% 40%, #222850, #181c38)',
+    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)',
+    pointerEvents: 'none' as any,
+    zIndex: 1,
   },
   dpadUp: {
     position: 'absolute' as any,
@@ -271,37 +310,75 @@ const desktopStyles: Record<string, React.CSSProperties> = {
     touchAction: 'none',
   },
   dpadArrow: {
-    color: '#555', fontSize: 'min(10px, 2.5vw)', lineHeight: 1,
+    color: 'rgba(120,130,180,0.5)', fontSize: 'min(10px, 2.5vw)', lineHeight: 1,
     pointerEvents: 'none' as any,
+    textShadow: '0 1px 1px rgba(0,0,0,0.4)',
   },
   buttons: {
-    display: 'flex', gap: 'min(12px, 2.5vw)', alignItems: 'center',
+    display: 'flex', gap: 'min(14px, 2.8vw)', alignItems: 'center',
   },
   btn: {
-    width: 'min(36px, 8vw)', height: 'min(36px, 8vw)', borderRadius: '50%',
+    width: 'min(40px, 8.5vw)', height: 'min(40px, 8.5vw)', borderRadius: '50%',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.15)',
     cursor: 'pointer', touchAction: 'none',
+    border: '1px solid rgba(0,0,0,0.3)',
+    transition: 'transform 0.06s ease',
+  },
+  btnA: {
+    background: 'radial-gradient(circle at 38% 32%, #e84a60, #c42b3e 50%, #9a1e30)',
+    boxShadow: `
+      0 3px 6px rgba(0,0,0,0.5),
+      0 1px 2px rgba(0,0,0,0.3),
+      inset 0 2px 3px rgba(255,255,255,0.25),
+      inset 0 -2px 4px rgba(0,0,0,0.3)
+    `,
+  },
+  btnB: {
+    background: 'radial-gradient(circle at 38% 32%, #4a88e8, #2b5ec4 50%, #1e3e9a)',
+    boxShadow: `
+      0 3px 6px rgba(0,0,0,0.5),
+      0 1px 2px rgba(0,0,0,0.3),
+      inset 0 2px 3px rgba(255,255,255,0.25),
+      inset 0 -2px 4px rgba(0,0,0,0.3)
+    `,
+  },
+  btnC: {
+    background: 'radial-gradient(circle at 38% 32%, #4ae870, #2ba84a 50%, #1e8a38)',
+    boxShadow: `
+      0 3px 6px rgba(0,0,0,0.5),
+      0 1px 2px rgba(0,0,0,0.3),
+      inset 0 2px 3px rgba(255,255,255,0.25),
+      inset 0 -2px 4px rgba(0,0,0,0.3)
+    `,
   },
   btnLabel: {
-    color: '#fff', fontSize: 'min(12px, 2.5vw)', fontWeight: 700,
-    fontFamily: 'system-ui, sans-serif',
-    textShadow: '0 1px 1px rgba(0,0,0,0.4)', pointerEvents: 'none' as any,
+    color: '#fff', fontSize: 'min(13px, 2.6vw)', fontWeight: 800,
+    fontFamily: "'Fredoka', 'Nunito', system-ui, sans-serif",
+    textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+    pointerEvents: 'none' as any,
+    letterSpacing: 0.5,
   },
-  label: { marginTop: 'min(8px, 1vh)', marginBottom: 'min(2px, 0.3vh)' },
+  label: {
+    marginTop: 'min(8px, 1vh)', marginBottom: 'min(4px, 0.5vh)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
   labelText: {
-    fontSize: 'min(11px, 2.5vw)', fontWeight: 700, letterSpacing: 3, color: '#555',
-    fontFamily: 'system-ui, sans-serif', textTransform: 'uppercase' as any,
+    fontSize: 'min(12px, 2.5vw)', fontWeight: 700, letterSpacing: 4, color: 'rgba(160,170,210,0.35)',
+    fontFamily: "'Fredoka', 'Nunito', system-ui, sans-serif",
+    textTransform: 'uppercase' as any,
+    textShadow: '0 -1px 0 rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.03)',
   },
   hinge: {
-    position: 'absolute', bottom: 0, left: 20, right: 20, height: 3,
-    borderRadius: '0 0 4px 4px',
-    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent)',
+    position: 'absolute', bottom: 0, left: 'min(30px, 4vw)', right: 'min(30px, 4vw)', height: 4,
+    borderRadius: '0 0 6px 6px',
+    background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 20%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.04) 80%, transparent 100%)',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
   },
 };
 
 /* ═══════════════════════════════════════════════════════════
    MOBILE — vertical Game Boy layout
+   Same deep indigo shell, chunky satisfying feel
    ═══════════════════════════════════════════════════════════ */
 
 const M_DPAD = '22vw';
@@ -311,43 +388,56 @@ const mobileStyles: Record<string, React.CSSProperties> = {
   page: {
     width: '100vw', height: '100dvh',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: '#0a0a0f', overflow: 'hidden',
+    background: 'radial-gradient(ellipse at 50% 30%, #0f1018 0%, #060608 100%)',
+    overflow: 'hidden',
     ...noSelect,
   },
   console: {
     width: '100vw', height: '100dvh',
-    background: 'linear-gradient(170deg, #2a2a30 0%, #1a1a20 100%)',
+    background: 'linear-gradient(172deg, #2c3052 0%, #1e2240 35%, #171a30 100%)',
     borderRadius: 0,
-    padding: '1.5vh 0 1vh',
+    padding: '1.8vh 0 1.2vh',
     display: 'flex', flexDirection: 'column', alignItems: 'center',
     position: 'relative', overflow: 'hidden',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
     ...noSelect,
   },
   topBar: {
     width: '100%', display: 'flex', justifyContent: 'center',
-    marginBottom: '0.8vh',
+    marginBottom: '1vh',
   },
-  grille: { display: 'flex', gap: 4 },
+  grille: { display: 'flex', gap: 5, alignItems: 'center' },
   grilleSlot: {
-    width: 16, height: 2, borderRadius: 1,
-    background: '#111', boxShadow: 'inset 0 1px 1px rgba(0,0,0,0.6)',
+    width: 18, height: 2.5, borderRadius: 2,
+    background: 'linear-gradient(180deg, #0d0f1a 0%, #181c30 100%)',
+    boxShadow: 'inset 0 1px 1px rgba(0,0,0,0.8), 0 0.5px 0 rgba(255,255,255,0.04)',
   },
   bezel: {
-    width: '94%', background: '#111', borderRadius: '2.5vw',
-    padding: '2.5vw', position: 'relative',
-    boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.8)',
+    width: '93%',
+    background: 'linear-gradient(180deg, #0a0c16 0%, #0e1020 50%, #0a0c16 100%)',
+    borderRadius: '3vw',
+    padding: '3vw', position: 'relative',
+    boxShadow: `
+      inset 0 3px 10px rgba(0,0,0,0.9),
+      inset 0 -1px 4px rgba(0,0,0,0.5),
+      0 1px 0 rgba(255,255,255,0.05)
+    `,
+    border: '1px solid rgba(0,0,0,0.4)',
     flex: '1 1 auto', minHeight: 0,
     display: 'flex', flexDirection: 'column',
   },
   led: {
-    position: 'absolute', top: '1.5vw', left: '3.5vw',
-    width: 5, height: 5, borderRadius: '50%',
-    background: '#2d2', boxShadow: '0 0 6px #2d2',
+    position: 'absolute', top: '2vw', left: '4.5vw',
+    width: 6, height: 6, borderRadius: '50%',
+    background: 'radial-gradient(circle at 35% 35%, #5eff5e, #1aaa1a 60%, #0a6e0a)',
+    boxShadow: '0 0 8px rgba(50,220,50,0.6), 0 0 3px rgba(50,220,50,0.9), inset 0 -1px 1px rgba(0,0,0,0.3)',
   },
   screenWrap: {
     position: 'relative', width: '100%',
     flex: '1 1 auto', minHeight: 0,
-    overflow: 'hidden', borderRadius: '1vw',
+    overflow: 'hidden', borderRadius: '1.5vw',
+    boxShadow: 'inset 0 0 16px rgba(0,0,0,0.6), 0 0 1px rgba(255,255,255,0.1)',
+    border: '1px solid rgba(0,0,0,0.5)',
   },
   iframe: {
     width: '100%', height: '100%', border: 'none', display: 'block',
@@ -355,12 +445,12 @@ const mobileStyles: Record<string, React.CSSProperties> = {
   },
   scanlines: {
     position: 'absolute', inset: 0, pointerEvents: 'none',
-    backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px)',
-    mixBlendMode: 'multiply' as any, borderRadius: '1vw',
+    backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.05) 2px, rgba(0,0,0,0.05) 4px)',
+    mixBlendMode: 'multiply' as any, borderRadius: '1.5vw',
   },
   controls: {
-    width: '94%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    padding: '2.5vh 3vw 0.5vh',
+    width: '93%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '2.8vh 3vw 0.8vh',
     flexShrink: 0,
     ...noSelect,
   },
@@ -369,16 +459,33 @@ const mobileStyles: Record<string, React.CSSProperties> = {
     ...noSelect,
   },
   dpadArm: {
-    position: 'absolute', background: '#222', borderRadius: 3,
-    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5)', pointerEvents: 'none' as any,
+    position: 'absolute',
+    background: 'linear-gradient(180deg, #1a1e38 0%, #141830 50%, #10132a 100%)',
+    borderRadius: 4,
+    boxShadow: `
+      inset 0 1px 2px rgba(0,0,0,0.6),
+      inset 0 -1px 1px rgba(255,255,255,0.03),
+      0 1px 3px rgba(0,0,0,0.4)
+    `,
+    pointerEvents: 'none' as any,
   },
   dpadV: {
-    width: `calc(${M_DPAD} * 0.31)`, height: M_DPAD,
-    left: `calc(${M_DPAD} * 0.345)`, top: 0,
+    width: `calc(${M_DPAD} * 0.33)`, height: M_DPAD,
+    left: `calc(${M_DPAD} * 0.335)`, top: 0,
   },
   dpadH: {
-    width: M_DPAD, height: `calc(${M_DPAD} * 0.31)`,
-    left: 0, top: `calc(${M_DPAD} * 0.345)`,
+    width: M_DPAD, height: `calc(${M_DPAD} * 0.33)`,
+    left: 0, top: `calc(${M_DPAD} * 0.335)`,
+  },
+  dpadCenter: {
+    position: 'absolute',
+    width: `calc(${M_DPAD} * 0.2)`, height: `calc(${M_DPAD} * 0.2)`,
+    left: `calc(${M_DPAD} * 0.4)`, top: `calc(${M_DPAD} * 0.4)`,
+    borderRadius: '50%',
+    background: 'radial-gradient(circle at 40% 40%, #222850, #181c38)',
+    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)',
+    pointerEvents: 'none' as any,
+    zIndex: 1,
   },
   dpadUp: {
     position: 'absolute' as any,
@@ -409,29 +516,62 @@ const mobileStyles: Record<string, React.CSSProperties> = {
     ...noSelect,
   },
   dpadArrow: {
-    color: '#555', fontSize: '3vw', lineHeight: 1,
-    pointerEvents: 'none' as any, ...noSelect,
+    color: 'rgba(120,130,180,0.5)', fontSize: '3.2vw', lineHeight: 1,
+    pointerEvents: 'none' as any,
+    textShadow: '0 1px 1px rgba(0,0,0,0.4)',
+    ...noSelect,
   },
   buttons: {
-    display: 'flex', gap: '3vw', alignItems: 'center',
+    display: 'flex', gap: '3.5vw', alignItems: 'center',
     ...noSelect,
   },
   btn: {
-    width: '10vw', height: '10vw', borderRadius: '50%',
+    width: '11vw', height: '11vw', borderRadius: '50%',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.15)',
+    border: '1px solid rgba(0,0,0,0.3)',
     ...noSelect,
+  },
+  btnA: {
+    background: 'radial-gradient(circle at 38% 32%, #e84a60, #c42b3e 50%, #9a1e30)',
+    boxShadow: `
+      0 3px 6px rgba(0,0,0,0.5),
+      0 1px 2px rgba(0,0,0,0.3),
+      inset 0 2px 3px rgba(255,255,255,0.25),
+      inset 0 -2px 4px rgba(0,0,0,0.3)
+    `,
+  },
+  btnB: {
+    background: 'radial-gradient(circle at 38% 32%, #4a88e8, #2b5ec4 50%, #1e3e9a)',
+    boxShadow: `
+      0 3px 6px rgba(0,0,0,0.5),
+      0 1px 2px rgba(0,0,0,0.3),
+      inset 0 2px 3px rgba(255,255,255,0.25),
+      inset 0 -2px 4px rgba(0,0,0,0.3)
+    `,
+  },
+  btnC: {
+    background: 'radial-gradient(circle at 38% 32%, #4ae870, #2ba84a 50%, #1e8a38)',
+    boxShadow: `
+      0 3px 6px rgba(0,0,0,0.5),
+      0 1px 2px rgba(0,0,0,0.3),
+      inset 0 2px 3px rgba(255,255,255,0.25),
+      inset 0 -2px 4px rgba(0,0,0,0.3)
+    `,
   },
   btnLabel: {
-    color: '#fff', fontSize: '3.2vw', fontWeight: 700,
-    fontFamily: 'system-ui, sans-serif',
-    textShadow: '0 1px 1px rgba(0,0,0,0.4)', pointerEvents: 'none' as any,
+    color: '#fff', fontSize: '3.5vw', fontWeight: 800,
+    fontFamily: "'Fredoka', 'Nunito', system-ui, sans-serif",
+    textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+    pointerEvents: 'none' as any,
+    letterSpacing: 0.5,
     ...noSelect,
   },
-  label: { marginTop: '0.5vh', marginBottom: '0.5vh', flexShrink: 0 },
+  label: { marginTop: '0.6vh', marginBottom: '0.6vh', flexShrink: 0 },
   labelText: {
-    fontSize: '2.8vw', fontWeight: 700, letterSpacing: 3, color: '#555',
-    fontFamily: 'system-ui, sans-serif', textTransform: 'uppercase' as any,
+    fontSize: '3vw', fontWeight: 700, letterSpacing: 4, color: 'rgba(160,170,210,0.35)',
+    fontFamily: "'Fredoka', 'Nunito', system-ui, sans-serif",
+    textTransform: 'uppercase' as any,
+    textShadow: '0 -1px 0 rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.03)',
     ...noSelect,
   },
   hinge: {},
