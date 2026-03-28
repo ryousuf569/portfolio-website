@@ -20,7 +20,7 @@ const TILE = 48, COLS = 20, ROWS = 15;
 const GW = COLS * TILE;
 const WORLD_SCALE = 1.4;
 
-const PIXEL_SCALE = 1.2; // render at lower res for chunky pixel look
+const PIXEL_SCALE = 1.0; // 1:1 for crisp text
 let W, H;
 function resize() {
   W = Math.ceil(window.innerWidth / PIXEL_SCALE);
