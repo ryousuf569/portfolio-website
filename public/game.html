@@ -21,9 +21,9 @@ const ctx = canvas.getContext('2d');
 
 const TILE = 48, COLS = 20, ROWS = 15;
 const GW = COLS * TILE;
-const WORLD_SCALE = 1.4;
+const WORLD_SCALE = 1.6;
 
-const PIXEL_SCALE = 1.15;
+const PIXEL_SCALE = 1.0;
 let W, H;
 function resize() {
   W = Math.ceil(window.innerWidth / PIXEL_SCALE);
@@ -269,45 +269,56 @@ function drawGround() {
 // ── Pine tree ─────────────────────────────────────────────────────────────────
 function drawTree(x, y, sz) {
   const cx = x + sz / 2;
-  // Snow on ground at base
-  ctx.fillStyle = 'rgba(230,236,244,0.5)';
-  ctx.beginPath();
-  ctx.ellipse(cx, y + sz * 0.95, sz * 0.35, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
+  const p = Math.max(2, Math.round(sz / 12)); // pixel unit
 
-  // Trunk with bark detail
+  // Snow on ground — blocky rectangles
+  ctx.fillStyle = '#e4eaf4';
+  ctx.fillRect(cx - p * 4, y + sz - p, p * 8, p);
+  ctx.fillRect(cx - p * 3, y + sz, p * 6, p);
+
+  // Trunk — blocky
   ctx.fillStyle = C.trunk;
-  ctx.fillRect(cx - 4, y + sz * 0.65, 8, sz * 0.35);
+  ctx.fillRect(cx - p, y + sz * 0.62, p * 2, sz * 0.38);
   ctx.fillStyle = C.trunkDk;
-  ctx.fillRect(cx - 1, y + sz * 0.7, 2, sz * 0.25);
+  ctx.fillRect(cx, y + sz * 0.66, p, sz * 0.28);
 
-  // Three tiers for more depth
-  const tiers = [
-    { ty: y - sz * 0.05, tw: sz * 0.32, th: sz * 0.38, col: C.pineDk },
-    { ty: y + sz * 0.18, tw: sz * 0.5,  th: sz * 0.38, col: C.pine },
-    { ty: y + sz * 0.36, tw: sz * 0.68, th: sz * 0.38, col: C.pineLt },
-  ];
-  tiers.forEach(tier => {
-    ctx.fillStyle = tier.col;
-    ctx.beginPath();
-    ctx.moveTo(cx, tier.ty);
-    ctx.lineTo(cx - tier.tw / 2, tier.ty + tier.th);
-    ctx.lineTo(cx + tier.tw / 2, tier.ty + tier.th);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = '#0a2a0a'; ctx.lineWidth = 1; ctx.stroke();
-  });
+  // Top tier (darkest, narrowest) — stepped pyramid
+  const t1y = y - p;
+  ctx.fillStyle = C.pineDk;
+  ctx.fillRect(cx - p,     t1y,         p * 2, p);
+  ctx.fillRect(cx - p * 2, t1y + p,     p * 4, p);
+  ctx.fillRect(cx - p * 3, t1y + p * 2, p * 6, p);
+  // Snow cap on top tier
+  ctx.fillStyle = '#eef2ff';
+  ctx.fillRect(cx - p, t1y, p * 2, p);
+  ctx.fillRect(cx - p * 2, t1y + p, p, p);
 
-  // Snow caps on each tier
-  ctx.fillStyle = 'rgba(240,244,255,0.7)';
-  tiers.forEach(tier => {
-    ctx.beginPath();
-    ctx.moveTo(cx, tier.ty);
-    ctx.lineTo(cx - tier.tw * 0.25, tier.ty + tier.th * 0.3);
-    ctx.lineTo(cx + tier.tw * 0.25, tier.ty + tier.th * 0.3);
-    ctx.closePath();
-    ctx.fill();
-  });
+  // Middle tier — stepped wider
+  const t2y = t1y + p * 3 + 1;
+  ctx.fillStyle = C.pine;
+  ctx.fillRect(cx - p * 2, t2y,         p * 4, p);
+  ctx.fillRect(cx - p * 3, t2y + p,     p * 6, p);
+  ctx.fillRect(cx - p * 4, t2y + p * 2, p * 8, p);
+  // Snow highlight on middle
+  ctx.fillStyle = '#eef2ff';
+  ctx.fillRect(cx - p * 2, t2y, p * 2, p);
+
+  // Bottom tier — widest
+  const t3y = t2y + p * 3 + 1;
+  ctx.fillStyle = C.pineLt;
+  ctx.fillRect(cx - p * 3, t3y,         p * 6, p);
+  ctx.fillRect(cx - p * 4, t3y + p,     p * 8, p);
+  ctx.fillRect(cx - p * 5, t3y + p * 2, p * 10, p);
+  // Snow highlight on bottom
+  ctx.fillStyle = '#eef2ff';
+  ctx.fillRect(cx - p * 3, t3y, p * 3, p);
+
+  // Dark edge pixels for definition
+  ctx.fillStyle = '#0a2a0a';
+  ctx.fillRect(cx - p * 5, t3y + p * 2, p, p);
+  ctx.fillRect(cx + p * 4, t3y + p * 2, p, p);
+  ctx.fillRect(cx - p * 4, t2y + p * 2, p, p);
+  ctx.fillRect(cx + p * 3, t2y + p * 2, p, p);
 }
 
 const TREE_TILES = [
@@ -334,8 +345,8 @@ function drawNpcSprite(img, tx, ty, label) {
   if (img.complete && img.naturalWidth > 0) ctx.drawImage(img, sx, sy, sw, sh);
 
   // Wooden sign nameplate
-  ctx.font = `bold 7px ${FONT}`;
-  const bw = ctx.measureText(label).width + 12;
+  ctx.font = `bold 9px ${FONT}`;
+  const bw = ctx.measureText(label).width + 14;
   const bx = tx + TILE / 2 - bw / 2;
   const by = ty + TILE - 14;
   // Post
@@ -415,7 +426,7 @@ function drawBuildingLabel(x, y, w, text, bgColor) {
   ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 0.8;
   rrect(x + 2, y, w - 4, 10, 2); ctx.stroke();
   ctx.fillStyle = '#fff';
-  ctx.font = `bold 6px ${FONT}`;
+  ctx.font = `bold 8px ${FONT}`;
   ctx.textAlign = 'center'; ctx.fillText(text, x + w / 2, y + 8); ctx.textAlign = 'left';
 }
 
@@ -569,7 +580,7 @@ function drawBuilding(x, y, key) {
   ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 0.8;
   rrect(bx + 3, by + bh - 28, bw - 6, 10, 1.5); ctx.stroke();
   ctx.fillStyle = darken(color, 0.5);
-  ctx.font = `bold 6px ${FONT}`;
+  ctx.font = `bold 8px ${FONT}`;
   ctx.textAlign = 'center'; ctx.fillText(short[key] || key, bx + bw / 2, by + bh - 20); ctx.textAlign = 'left';
 }
 
@@ -628,9 +639,9 @@ function drawFullPopup(data) {
 
   const pad = Math.round(W * 0.03);
   const titleH = Math.round(H * 0.11);
-  const titleFont = Math.max(12, Math.round(H * 0.055));
-  const bodyFont = Math.max(10, Math.round(H * 0.042));
-  const lineGap = Math.round(H * 0.072);
+  const titleFont = Math.max(14, Math.round(H * 0.065));
+  const bodyFont = Math.max(12, Math.round(H * 0.052));
+  const lineGap = Math.round(H * 0.082);
 
   function wrapText(text, maxW) {
     const words = text.split(' ');
@@ -715,7 +726,7 @@ function drawFullPopup(data) {
   ctx.restore();
 
   // Close hint
-  const smallFont = Math.max(9, Math.round(H * 0.033));
+  const smallFont = Math.max(11, Math.round(H * 0.04));
   ctx.fillStyle = '#a09070'; ctx.font = `${smallFont}px ${FONT}`;
   ctx.textAlign = 'right';
   ctx.fillText('B / ESC to close', popX + popW - 12, popY + popH - 8);
@@ -764,10 +775,10 @@ function drawDialog(data) {
   }
   ctx.restore();
 
-  const titleFont = Math.max(11, Math.round(H * 0.045));
-  const bodyFont = Math.max(10, Math.round(H * 0.038));
-  const linkFont = Math.max(9, Math.round(H * 0.035));
-  const dlLineGap = Math.round(H * 0.06);
+  const titleFont = Math.max(14, Math.round(H * 0.058));
+  const bodyFont = Math.max(12, Math.round(H * 0.048));
+  const linkFont = Math.max(11, Math.round(H * 0.042));
+  const dlLineGap = Math.round(H * 0.072);
 
   const tx = portX + ps + 14, tw = dw - ps - 38;
   const titleBarH = Math.round(dh * 0.16);
@@ -800,8 +811,8 @@ function drawDialog(data) {
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
 function drawHUD() {
-  const hudFont = Math.max(10, Math.round(H * 0.04));
-  const hudSmall = Math.max(9, Math.round(H * 0.032));
+  const hudFont = Math.max(12, Math.round(H * 0.048));
+  const hudSmall = Math.max(11, Math.round(H * 0.04));
 
   // Location badge — top left
   const locW = W * 0.38;
@@ -866,8 +877,8 @@ function nearbyObj() {
 function drawInteractHint(obj) {
   const label = obj[2] === 'npc' ? 'Space/A to talk' : 'Space/A to enter';
   const tx = obj[0] * TILE, ty = obj[1] * TILE;
-  ctx.font = `bold 7px ${FONT}`;
-  const tw = ctx.measureText(label).width + 12;
+  ctx.font = `bold 9px ${FONT}`;
+  const tw = ctx.measureText(label).width + 14;
   const hx = tx + TILE / 2 - tw / 2;
   // Bobbing animation
   const bob = Math.sin(Date.now() * 0.004) * 2;
