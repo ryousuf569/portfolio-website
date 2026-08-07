@@ -10,6 +10,12 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /* Book face for the liner-notes booklet. System stack rather than a webfont:
+     every target platform already ships a competent serif, and pulling another
+     file would add a request and a flash of unstyled text for body copy that is
+     only visible once a disc is loaded. */
+  --font-serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino,
+    "Book Antiqua", Georgia, "Times New Roman", serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,7 +26,10 @@
 }
 
 body {
-  background: var(--background);
+  /* The page's own dark ground. It lives here rather than on the page wrapper
+     because the audio-reactive canvas is a fixed child of that wrapper, and a
+     background on the wrapper would paint straight over it. */
+  background: #0e0f13;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }

@@ -263,7 +263,13 @@ function knob(d: Disposables, mats: BoomboxMaterials, radius: number) {
   return group;
 }
 
-/** One speaker: outer silver ring, bezel, rubber surround, cone, dust cap. */
+/**
+ * One speaker: outer silver ring, bezel, rubber surround, cone, dust cap.
+ *
+ * Returns the group plus the two parts that move. Only the cone and dust cap
+ * travel — the ring, bezel and surround are bolted to the cabinet on a real
+ * driver, and pumping the whole assembly reads as the speaker falling out.
+ */
 function speaker(d: Disposables, mats: BoomboxMaterials, radius: number) {
   const group = new THREE.Group();
 
@@ -302,13 +308,26 @@ function speaker(d: Disposables, mats: BoomboxMaterials, radius: number) {
   cap.scale.z = 0.5;
   group.add(cap);
 
-  return group;
+  // Rest positions cached so the animation loop can offset from them without
+  // needing to know how the speaker was assembled.
+  coneMesh.userData.restZ = coneMesh.position.z;
+  cap.userData.restZ = cap.position.z;
+
+  return { group, cone: coneMesh, cap };
 }
 
 /* ---------- the assembled deck ------------------------------------------ */
 
+/** The parts of one driver that travel when it is pushed. */
+export type WooferParts = {
+  cone: THREE.Mesh;
+  cap: THREE.Mesh;
+};
+
 export type BoomboxRig = {
   root: THREE.Group;
+  /** Both drivers' moving parts, for bass-driven excursion. */
+  woofers: WooferParts[];
   /** Hinged CD lid — rotates open on eject. */
   lid: THREE.Group;
   /** Mount point for the spinning disc, inside the lid well. */
@@ -341,10 +360,14 @@ export function buildBoombox(d: Disposables): BoomboxRig {
   root.add(fascia);
 
   /* --- speakers --------------------------------------------------------- */
+  // The moving parts are collected so the render loop can drive them from the
+  // bass level — see BoomboxRig.woofers.
+  const woofers: WooferParts[] = [];
   for (const side of [-1, 1]) {
     const sp = speaker(d, mats, 0.54);
-    sp.position.set(side * 0.82, -0.12, 0.66);
-    root.add(sp);
+    sp.group.position.set(side * 0.82, -0.12, 0.66);
+    root.add(sp.group);
+    woofers.push({ cone: sp.cone, cap: sp.cap });
   }
 
   /* --- centre console --------------------------------------------------- */
@@ -540,6 +563,7 @@ export function buildBoombox(d: Disposables): BoomboxRig {
 
   return {
     root,
+    woofers,
     lid,
     discMount,
     lcdMaterial: mats.lcd,
