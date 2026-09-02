@@ -53,7 +53,7 @@ const CONFIG = {
    */
   bloom: {
     strength: 0.22,
-    /** Added at full bass — kept tight so it never strobes. */
+    /** Added at full bass, kept tight so it never strobes. */
     strengthBass: 0.18,
     radius: 0.6,
     threshold: 0.35,
@@ -68,7 +68,7 @@ const CONFIG = {
     shellSat: 0.4,
     /** Resting lightness, with nothing playing. */
     shellLight: 0.42,
-    /** Added at full loudness — this is what makes it visibly brighten. */
+    /** Added at full loudness: this is what makes it visibly brighten. */
     shellLightBoost: 0.4,
     dustSat: 0.3,
     dustLight: 0.5,
@@ -85,7 +85,7 @@ const CONFIG = {
 
   /**
    * Cursor parallax. The camera leans a couple of degrees toward the pointer,
-   * heavily damped so it trails rather than tracks — instant response reads as
+   * heavily damped so it trails rather than tracks, instant response reads as
    * jitter, not depth.
    */
   parallax: {
@@ -142,11 +142,11 @@ export type BackgroundHandle = {
    * Current smoothed band levels, 0..1. The analyser lives here because this is
    * what owns the AudioContext, so other animated layers (the deck's speaker
    * cones) read the same numbers rather than each building their own graph off
-   * the one audio element — createMediaElementSource can only be called once
+   * the one audio element, createMediaElementSource can only be called once
    * per element, so a second graph is not even possible.
    */
   getLevels: () => { bass: number; mid: number; treble: number };
-  /** Whether a track is actually playing — gates the reactive intensity. */
+  /** Whether a track is actually playing, gates the reactive intensity. */
   setPlaying: (v: boolean) => void;
   /**
    * Attach the analyser to the page's audio element. Must be called from a
@@ -187,7 +187,7 @@ export function createBackground(host: HTMLElement): BackgroundHandle | null {
       powerPreference: "high-performance",
     });
   } catch {
-    return null; // No WebGL — the page keeps its flat background.
+    return null; // No WebGL, the page keeps its flat background.
   }
   host.appendChild(canvas);
 
@@ -228,7 +228,7 @@ export function createBackground(host: HTMLElement): BackgroundHandle | null {
   scene.add(shell);
 
   // Cache the rest pose ONCE. Every frame recomputes each vertex from this
-  // immutable copy, never from the live buffer — otherwise displacement
+  // immutable copy, never from the live buffer, otherwise displacement
   // compounds frame over frame and the mesh inflates without bound.
   const shellPos = shellGeo.attributes.position;
   const restPositions = new Float32Array(shellPos.array as Float32Array);
@@ -247,7 +247,7 @@ export function createBackground(host: HTMLElement): BackgroundHandle | null {
       const y = restPositions[i + 1];
       const z = restPositions[i + 2];
       // The rest pose is centred on the origin, so the normalized rest
-      // position IS the surface normal — displace along it.
+      // position IS the surface normal, displace along it.
       vTmp.set(x, y, z).normalize();
       const n = noise.noise(x * s + t, y * s, z * s); // -1..1
       const d = n * amount * CONFIG.shell.radius * 0.35;
@@ -298,7 +298,7 @@ export function createBackground(host: HTMLElement): BackgroundHandle | null {
   composer.addPass(bloomPass);
 
   // Film grain, as the final pass. Dark gradients on an 8-bit display band into
-  // visible steps, and a little per-pixel noise dithers those steps away — it is
+  // visible steps, and a little per-pixel noise dithers those steps away; it is
   // the cheapest thing that stops a smooth dark field looking cheap.
   //
   // Applied in the shader rather than as a tiled PNG overlay: there is already a
@@ -326,7 +326,7 @@ export function createBackground(host: HTMLElement): BackgroundHandle | null {
       uniform float uTime;
       varying vec2 vUv;
 
-      // Cheap hash — no texture, no trig.
+      // Cheap hash, no texture, no trig.
       float hash(vec2 p){
         return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
       }
@@ -427,7 +427,7 @@ export function createBackground(host: HTMLElement): BackgroundHandle | null {
     // grows downward.
     pointerY = -((e.clientY / window.innerHeight) * 2 - 1);
   };
-  // passive — this only reads coordinates and must never delay scrolling.
+  // passive: this only reads coordinates and must never delay scrolling.
   window.addEventListener("pointermove", onPointerMove, { passive: true });
 
   /* --- loop ------------------------------------------------------------ */
@@ -451,7 +451,7 @@ export function createBackground(host: HTMLElement): BackgroundHandle | null {
     // opens it up and lets the bands actually drive it.
     const gate = playing ? 1 : 0.45;
 
-    // Overall loudness, weighted toward bass and mids — that is where perceived
+    // Overall loudness, weighted toward bass and mids, since that is where perceived
     // "louder" lives, and keying off treble alone makes the field flare on
     // hi-hats while ignoring the actual body of the track.
     const loud = levels.bass * 0.5 + levels.mid * 0.35 + levels.treble * 0.15;
@@ -506,7 +506,7 @@ export function createBackground(host: HTMLElement): BackgroundHandle | null {
         (0.9 +
           Math.sin(elapsed * 0.001 * CONFIG.dust.twinkleRate) * 0.1);
 
-      // Camera drift — a slow sine orbit, plus a damped lean toward the cursor.
+      // Camera drift, a slow sine orbit, plus a damped lean toward the cursor.
       // No OrbitControls: this canvas is a backdrop behind the page's own
       // controls and takes no pointer input, so the pointer is sampled from the
       // window instead of from canvas events.
@@ -526,12 +526,12 @@ export function createBackground(host: HTMLElement): BackgroundHandle | null {
       camera.position.y =
         Math.cos(a * 0.7) * CONFIG.camera.driftHeight + parallaxY;
       // Look at a point nudged opposite the lean, which turns a sideways slide
-      // into a slight rotation — parallax between the shell and the dust behind
+      // into a slight rotation, parallax between the shell and the dust behind
       // it, rather than the whole field panning as one flat layer.
       camera.lookAt(-parallaxX * 0.35, -parallaxY * 0.35, 0);
     }
 
-    // Bloom breathes with overall loudness inside a deliberately narrow range —
+    // Bloom breathes with overall loudness inside a deliberately narrow range,
     // the glow swelling with the track is most of what sells "brighter", but a
     // wide range here is what made the text unreadable, so the ceiling stays low.
     bloomPass.strength =
@@ -588,7 +588,7 @@ export function createBackground(host: HTMLElement): BackgroundHandle | null {
         );
         sourceNode = audioCtx.createMediaElementSource(el);
         // Routing through the analyser diverts the element's output into the
-        // graph. Connecting on to `destination` is what keeps it audible — omit
+        // graph. Connecting on to `destination` is what keeps it audible, omit
         // this and the track plays silently with no error anywhere.
         sourceNode.connect(analyser);
         analyser.connect(audioCtx.destination);
@@ -633,7 +633,7 @@ export function createBackground(host: HTMLElement): BackgroundHandle | null {
       composer.renderTarget2.dispose();
       composer.dispose();
       renderer.dispose();
-      // Required as of Next 16 — dispose() alone does not release the context
+      // Required as of Next 16: dispose() alone does not release the context
       // across the App Router's remount cycle, and browsers cap live contexts.
       renderer.forceContextLoss();
       canvas.remove();

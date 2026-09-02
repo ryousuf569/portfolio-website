@@ -4,80 +4,89 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { Disposables, buildBoombox, type ControlId } from "./boombox";
 import { createBackground, type BackgroundHandle } from "./background";
-import { createCase, type CaseHandle } from "./cdcase";
 
 /* =========================================================================
    Disc data
+
+   One disc per section, one song per disc. The song is the section's theme:
+   it is not a carrier for content, so there is no track list to page through
+   and the transport's Next/Prev move between *cards* instead.
+
+   The content lives in `cards`: small panels you flip through in the right
+   column. They are deliberately not jewel cases. A case is furniture that
+   frames content, and the content is the point.
    ========================================================================= */
 
 /**
- * One song on a disc. `startAt` is a one-time cue applied when the track is
- * first reached — always inside the first minute, so the disc drops the
- * listener into the song rather than its intro. Once a track ends it loops
- * from 0:00; the offset is not a loop point.
+ * A figure on a card, a screenshot, chart or logo.
  */
-/**
- * A figure in the booklet — a screenshot, chart or diagram, printed as a
- * numbered plate with a caption the way a liner-notes insert would.
- */
-type Plate = {
+type Figure = {
   src: string;
   /** Intrinsic pixel size, so the layout reserves the right box before load. */
   width: number;
   height: number;
   /** Alt text. Describes the figure, not the fact that it is a figure. */
   alt: string;
-  /** Caption after the "PLATE NN — " prefix, which is generated. */
-  caption: string;
+  /** Optional caption, set small under the image. */
+  caption?: string;
   /**
-   * Print the figure at its own size, centred, rather than bled to the full
-   * measure. For logos and other small marks: a 200px square scaled up to a
-   * 640px column is visibly soft, and a mark does not want to be a full plate.
+   * Show the figure at its own size, centred, rather than bled to the card's
+   * full width. For logos and other small marks: a 200px square scaled up to a
+   * 640px column is visibly soft.
    */
   inset?: boolean;
+  /**
+   * Cap an inset figure's displayed width, in px. Needed when the source is
+   * large but should still be printed small: a 1242px square portrait is not a
+   * full-bleed plate, and without a cap `inset` alone would let it fill the
+   * card exactly like one.
+   */
+  maxWidth?: number;
 };
 
-/** One line in the credits block: "code · demo · writeup" as liner notes. */
-type Credit = {
-  /** Left column, small caps — the role, e.g. "code", "written at". */
+/** One line in a card's link list. */
+type Link = {
+  /** Left column, small caps, the role, e.g. "code", "github". */
   role: string;
-  /** Right column — the value. A URL renders as a link. */
+  /** Right column, the value. A URL renders as a link. */
   value: string;
   href?: string;
 };
 
-type Track = {
-  /** Path under /public. Opus @ 64k VBR — see the note in README/AGENTS. */
+/**
+ * One card in a section's stack. Each carries exactly one item of content: a
+ * single role, a single project, one half of the bio.
+ */
+type Card = {
+  /** Stable key. Also the fragment a card could be linked by later. */
+  id: string;
+  /** Headline, the one thing this card stands for. */
+  heading: string;
+  /** Small line above the heading: a company, a stack, a date range. */
+  eyebrow?: string;
+  /** One-line standfirst under the heading, set in italic serif. */
+  standfirst?: string;
+  /** The card's body copy. */
+  body: React.ReactNode;
+  /** Figures, shown in order after the body. */
+  figures?: Figure[];
+  /** Links block, shown after the body and before the figures. */
+  links?: Link[];
+};
+
+/**
+ * The disc's song. `startAt` is a one-time cue applied on insert, always
+ * inside the first three minutes, so the disc drops the listener into the song
+ * rather than its intro. When the song ends it loops from 0:00; the offset is
+ * not a loop point.
+ */
+type Song = {
+  /** Path under /public. Opus @ 64k VBR, see the note in README/AGENTS. */
   audio: string;
   /** Release title, as shown in the transport bar. */
   title: string;
-  /** Seconds into the track where playback should begin on insert. */
+  /** Seconds into the song where playback should begin on insert. */
   startAt: number;
-  /**
-   * Headline for this track's panel — the one thing this song stands for
-   * (a single role, a single project, one half of the bio).
-   */
-  heading: string;
-  /** One-line standfirst under the heading, set in italic serif. */
-  standfirst?: string;
-  /**
-   * Artwork for the 3D case's front cover. Falls back to the first plate when
-   * absent, so a track with a figure always has a cover without duplicating the
-   * path in the data.
-   */
-  cover?: string;
-  /**
-   * How the cover art fills the case front. Defaults to "cover" (crop to fill),
-   * which suits photographs. Use "contain" for a logo: cropping a mark's edges
-   * or blowing a small square up to fill a landscape frame both read as broken.
-   */
-  coverFit?: "cover" | "contain";
-  /** The panel shown on the right while this track is cued. */
-  body: React.ReactNode;
-  /** Figures, printed in order after the body. */
-  plates?: Plate[];
-  /** Credits block. Printed above the plates — see the Booklet layout. */
-  credits?: Credit[];
 };
 
 type Disc = {
@@ -86,29 +95,32 @@ type Disc = {
   /** Short label printed on the disc face. */
   short: string;
   /**
-   * Catalogue number, as a small label would carry. Printed on the disc, in the
-   * booklet corner and on the spine, so the same identifier follows a section
+   * Catalogue number, as a small label would carry. Printed on the disc, on
+   * the cards and on the spine, so the same identifier follows a section
    * everywhere it appears.
    */
   catalog: string;
+  /**
+   * One line naming what is on this disc, for the empty-state picker. Written
+   * as the contents of the section, not as a pitch for it, a visitor deciding
+   * where to start wants to know what they'd be reading.
+   */
+  blurb: string;
   /** Two hues driving the disc's iridescent sheen. */
   hueA: number;
   hueB: number;
   /**
-   * The hue this disc contributes to the whole page — the backdrop blob, the
+   * The hue this disc contributes to the whole page, the backdrop blob, the
    * left panel's accents, the transport bar. Named separately from hueA/hueB
    * because the sheen pair is chosen to look iridescent, and the more
    * *identifiable* of the two is not always hueA: EXP reads pink in the tray
    * even though its hueA is orange. This is the one a visitor would name.
    */
   accent: number;
-  /**
-   * Songs on this disc, in order. Skip cycles within this list only —
-   * changing discs is done by ejecting and loading another one. Each track
-   * carries exactly one item of content, so skipping is how you page through
-   * a disc's material.
-   */
-  tracks: Track[];
+  /** The one song on this disc. */
+  song: Song;
+  /** The section's content, as cards you flip through. */
+  cards: Card[];
 };
 
 const DISCS: Disc[] = [
@@ -117,63 +129,55 @@ const DISCS: Disc[] = [
     title: "About Me",
     short: "ABOUT",
     catalog: "YR-001",
+    blurb: "Applied Math at Waterloo, and what I do when I'm not at a screen.",
     hueA: 195,
     hueB: 280,
     accent: 195,
-    tracks: [
+    song: {
+      audio: "/hightideintermission.ogg",
+      title: "High Tide",
+      startAt: 24,
+    },
+    cards: [
       {
-        audio: "/touch-my-face.ogg",
-        title: "touch my face",
-        startAt: 0,
-        heading: "The Technical Side",
-        cover: "/tech_side.JPG",
+        id: "technical",
+        heading: "About me",
+        eyebrow: "University of Waterloo",
         body: (
           <>
             <p>
-              I'm a second-year Applied Mathematics student at the University of Waterloo, specializing in Scientific Machine Learning.
+              I&apos;m a second-year Applied Mathematics student at the
+              University of Waterloo, specializing in Scientific Machine
+              Learning.
             </p>
             <p>
-              My approach is math-first: I take on projects that pose a mathematical problem.
+              I take a math-first approach: I don&apos;t write code before I
+              understand the theory behind the model I&apos;m building. Whether
+              it&apos;s sport analytics, quant modeling, physics, or natural
+              language processing, I open up 3Blue1Brown or StatQuest before I
+              start on the problem.
+            </p>
+            <p>
+              Outside of math and work, I make music (press play on the CD
+              player) and run soccer intramurals with my boys at Waterloo.
             </p>
           </>
         ),
-        plates: [
+        figures: [
           {
-            src: "/tech_side.JPG",
-            width: 1800,
-            height: 1013,
+            // 1242x1242. The declared size has to match the file, or the
+            // layout reserves a box of the wrong shape and the portrait is
+            // distorted until it loads.
+            src: "/headshot.JPG",
+            width: 1242,
+            height: 1242,
             alt:
-              "A desk lit by a table lamp with three screens open — a large monitor and two laptops, each showing code and a terminal — and me sitting at the right of frame in a red shirt.",
-            caption: "I thought I was super cool",
-          },
-        ],
-      },
-      {
-        audio: "/hightideintermission.ogg",
-        title: "High Tide",
-        startAt: 24,
-        heading: "The Personal Side",
-        cover: "/personal_side.gif",
-        body: (
-          <>
-            <p>
-              TODO — who you are away from the editor. What you make, listen
-              to, or keep coming back to.
-            </p>
-            <p>
-              TODO — the rest of it: how you spend a good weekend, and what
-              you&apos;d talk about for an hour unprompted.
-            </p>
-          </>
-        ),
-        plates: [
-          {
-            src: "/personal_side.gif",
-            width: 774,
-            height: 498,
-            alt:
-              "Animation of me dribbling a football across a park pitch on a clear day, with houses along the far edge and two more balls on the grass.",
-            caption: "On the pitch — the other half of it.",
+              "Yousuf Rashid, smiling, in front of a window overlooking a rooftop.",
+            caption: "Last time I was happy during finals season",
+            // Shown small and centred rather than bled to the full measure: a
+            // square portrait at card width would tower over the copy.
+            inset: true,
+            maxWidth: 300,
           },
         ],
       },
@@ -184,75 +188,80 @@ const DISCS: Disc[] = [
     title: "Experience",
     short: "EXP",
     catalog: "YR-002",
+    blurb: "Research engineering at DeepIDV, NLP research at Wat.AI.",
     hueA: 25,
     hueB: 330,
     accent: 330,
-    tracks: [
+    song: {
+      audio: "/buzz-me-in.ogg",
+      title: "BUZZ ME IN",
+      startAt: 162, // 2:42
+    },
+    cards: [
       {
-        audio: "/buzz-me-in.ogg",
-        title: "BUZZ ME IN",
-        startAt: 162, // 2:42
+        id: "deepidv",
         heading: "Research Engineering Intern @ DeepIDV",
-        cover: "/deepidv.jpg",
-        coverFit: "contain",
+        eyebrow: "DeepIDV · Apr – Aug 2026",
         body: (
           <>
-            <p className="font-mono text-[13px] text-zinc-400">
-              DeepIDV · Apr - Aug 2026
-            </p>
-            <p>
-              Co-Authored the TripleLock Encryption Algorithm
-            </p>
+            <p>Co-Authored the Architecture Encryption Algorithm (Patent Pending)</p>
             <ul>
-              <li>Sole architecture reviewer of a three-party consent-gated decryption protocol requiring collaborative recovery across Client, HSM-backed Operator, and Relying Party</li>
-              <li>Removed ArcFace embeddings from the encryption boundary and introduced fuzzy extraction to absorb biometric vector variance, eliminating hashing issues</li>
+              <li>
+                Sole architecture reviewer of a three-party consent-gated
+                decryption protocol requiring collaborative recovery across
+                Client, HSM-backed Operator, and Relying Party
+              </li>
+              <li>
+                Removed ArcFace embeddings from the encryption boundary and
+                introduced fuzzy extraction to absorb biometric vector variance,
+                eliminating hashing issues
+              </li>
+              <li>
+                Generated <strong>2500+</strong> synthetic IDs across 100+
+                document types with YOLO and PIL, powering a TensorFlow
+                classifier that reached <strong>99.8%</strong> accuracy
+              </li>
             </ul>
           </>
         ),
-        plates: [
+        figures: [
           {
             src: "/deepidv.jpg",
             width: 200,
             height: 200,
-            alt: "DeepIDV logo — a chevron mark in two tones of blue.",
-            caption: "DeepIDV.",
+            alt: "DeepIDV logo, a chevron mark in two tones of blue.",
             inset: true,
-          },
-        ],
-        credits: [
-          {
-            role: "triplelock",
-            value: "github.com/Deep-Identity-Inc/deepidv-triplelock",
-            href: "https://github.com/Deep-Identity-Inc/deepidv-triplelock",
           },
         ],
       },
       {
-        audio: "/saudadefinalmm (1).ogg",
-        title: "saudade (demo)",
-        startAt: 51, // 0:51
+        id: "watai",
         heading: "NLP Research @ Wat.AI",
-        cover: "/wat_ai_logo.jpg",
-        coverFit: "contain",
+        eyebrow: "Wat.AI · Jan – Dec 2026",
         body: (
           <>
-            <p className="font-mono text-[13px] text-zinc-400">
-              Wat.AI · Jan - Dec 2026
-            </p>
             <p>
-              Owned the sentiment analysis pipeline for the Macro scenario simulator InsightPulse
+              Owned the sentiment analysis pipeline for the Macro scenario
+              simulator InsightPulse
             </p>
             <ul>
-              <li>Finetuning FinBERT to accurately predict sentiment on Macro headlines</li>
-              <li>Working on Asset-conditioned financial sentiment research; predicting sentiment for assets not mentioned in the headline.</li>
+              <li>
+                Finetuning FinBERT to accurately predict sentiment on Macro
+                headlines unfreezing the top 6 encoder blocks to gain +29.8 macro F1 
+                without a full retrain
+              </li>
+              <li>
+                Working on Asset-conditioned financial sentiment research;
+                predicting sentiment for assets not mentioned in the headline.
+              </li>
             </ul>
           </>
         ),
-        credits: [
+        links: [
           {
-            role: "finbert",
-            value: "github.com/ryousuf569/finbertfinetune",
-            href: "https://github.com/ryousuf569/finbertfinetune",
+            role: "finbert-macro",
+            value: "huggingface.co/ryousuf569/finbert-macro",
+            href: "https://huggingface.co/ryousuf569/finbert-macro",
           },
           {
             role: "insightpulse",
@@ -260,13 +269,13 @@ const DISCS: Disc[] = [
             href: "https://github.com/SharanyaBasu/InsightPulse",
           },
         ],
-        plates: [
+        figures: [
           {
             src: "/wat_ai_logo.jpg",
             width: 200,
             height: 200,
-            alt: "Wat.AI logo — a stylised yellow W drawn in a single line on black.",
-            caption: "Wat.AI.",
+            alt:
+              "Wat.AI logo, a stylised yellow W drawn in a single line on black.",
             inset: true,
           },
         ],
@@ -278,34 +287,68 @@ const DISCS: Disc[] = [
     title: "Projects",
     short: "PROJ",
     catalog: "YR-003",
+    blurb:
+      "Reinforcement learning on a football pitch, draft policies, and overfit detection.",
     hueA: 140,
     hueB: 200,
     accent: 160,
-    tracks: [
+    song: {
+      audio: "/ladybird-mm1.ogg",
+      title: "lakeshore west (ladybird)",
+      startAt: 42, // 0:42
+    },
+    cards: [
       {
-        audio: "/forbearance-mm.ogg",
-        title: "Solace",
-        startAt: 45, // 0:45
-        heading: "Lowblock RL",
+        id: "lowblock-rl",
+        heading: "Constrained Multi-Agent RL for Spatial Control Tasks",
+        eyebrow: "Soccer based environments · CUDA · PyTorch",
         standfirst:
-          "Teaching attackers to break a parked bus, using controlled space as the reward.",
-        cover: "/lowblock_rl.png",
+          "Ten agents learning to take space under constraints, on a spatial-control model rewritten to run 5x faster.",
         body: (
           <>
             <p>
-              A PPO agent learns to attack a low block in a simulated football
-              match, rewarded by <em>pitch control</em> — William Spearman&apos;s
-              model of which team would reach a given patch of grass first.
-              Instead of rewarding goals alone, which are far too sparse to learn
-              from, the agent is paid continuously for the space it takes.
+              Agents are rewarded by <em>pitch control</em>, William
+              Spearman&apos;s model of which team would reach a given patch of
+              grass first. Rewarding goals alone is far too sparse to learn
+              from, so the agents are paid continuously for the space they take.
             </p>
-            <p>
-              TODO — the rest: how the agent is trained, what the low block
-              opponent does, and what the run actually produced.
-            </p>
+            <ul>
+              <li>
+                Rewrote the spatial-control model as{" "}
+                <strong>a custom CUDA kernel in C++</strong>, delivering a{" "}
+                <strong>5.44x</strong> throughput gain at 0.0009 max deviation
+                from a known NumPy implementation.
+              </li>
+              <li>
+                Implemented Lagrangian-constrained PPO (Roy et al., 2022) in
+                PyTorch over a 10-agent MultiDiscrete action space,
+                outperforming a 10M-step unconstrained PPO baseline after just{" "}
+                <strong>2.5M</strong> steps.
+              </li>
+              <li>
+                Calibrated a correlated-Gaussian generative model of
+                multi-agent formations against real-world tracking data.
+              </li>
+              <li>
+                Found that patching an emergent side effect in
+                Lagrangian-constrained PPO cost <strong>15pp</strong> of task
+                success, isolating a real trade-off in multi-constraint RL.
+              </li>
+            </ul>
           </>
         ),
-        plates: [
+        links: [
+          {
+            role: "code",
+            value: "github.com/ryousuf569/haramball-hunter",
+            href: "https://github.com/ryousuf569/haramball-hunter",
+          },
+          {
+            role: "method",
+            value: "Lagrangian-constrained PPO · Spearman pitch control",
+          },
+        ],
+        figures: [
           {
             src: "/lowblock_rl.png",
             width: 1606,
@@ -316,77 +359,109 @@ const DISCS: Disc[] = [
               "Pitch control surface mid-possession. Shading is probability of winning the ball at each point; arrows are player velocities.",
           },
         ],
-        credits: [
+      },
+      {
+        id: "nba-draft-policy",
+        heading: "Sequential Ranking Policy with Counterfactual Evaluation",
+        eyebrow: "NBA fantasy drafts · XGBoost · Cox · Monte Carlo",
+        standfirst:
+          "A two-stage drafting policy, and the harness that proved its win was noise.",
+        body: (
+          <>
+            <p>
+              A <strong>two-stage ranking</strong> system: XGBoost scores
+              candidates, and a <strong>Monte Carlo</strong> rollout policy
+              decides the order to take them in. Candidate availability is
+              modelled with a <strong>Cox survival</strong> model, reaching{" "}
+              <strong>0.935</strong> concordance.
+            </p>
+            <ul>
+              <li>
+                Counterfactual evaluation over <strong>4,400</strong> paired
+                drafts, controlling for season, league size, slot and seed.
+              </li>
+              <li>
+                At small sample the policy looked like a <strong>+2.35</strong>{" "}
+                pt lift. The confidence interval rejected it as noise. At full
+                scale it underperformed the ADP baseline by{" "}
+                <strong>−0.14</strong> pts. The harness is the result.
+              </li>
+            </ul>
+          </>
+        ),
+        links: [
           {
             role: "code",
-            value: "github.com/ryousuf569/haramball-hunter",
-            href: "https://github.com/ryousuf569/haramball-hunter",
+            value: "github.com/ryousuf569/espn-draft-sequential-optimization",
+            href:
+              "https://github.com/ryousuf569/espn-draft-sequential-optimization",
           },
-          { role: "method", value: "Spearman pitch control · PPO" },
+          {
+            role: "paper",
+            value: "Does draft-order modeling beat expert consensus? (PDF)",
+            href: "/backtest.pdf",
+          },
+        ],
+        figures: [
+          {
+            src: "/nba_draft_paired.png",
+            width: 1776,
+            height: 1000,
+            alt:
+              "Histogram of paired per-draft differences between the sequencing policy and the VORP-greedy baseline, centred on zero: median −0.44 with a 5th–95th range of −14.2 to +14.6, beating the baseline in 45.7% of drafts.",
+            caption:
+              "Sequencing on identical inputs, draft by draft. The per-draft spread is two orders of magnitude wider than the effect being measured, which is why the +2.35 did not survive.",
+          },
         ],
       },
       {
-        audio: "/bound2breakmm1.ogg",
-        title: "Bound 2 Break",
-        startAt: 33, // 0:33
-        heading: "TODO — Project Two",
+        id: "sonarql",
+        heading: "Overfit Detection on Trading Strategies",
+        eyebrow: "SonarQL · bootstrap · Monte Carlo",
+        standfirst:
+          "A query layer that tells you when a backtest is only luck.",
         body: (
           <>
-            <p className="font-mono text-[13px] text-zinc-400">
-              TODO — Stack · Year
-            </p>
             <p>
-              TODO — what this project does, who it&apos;s for, and the problem
-              it solves.
+              Distribution diagnostics built on{" "}
+              <strong>bootstrap sampling</strong> and{" "}
+              <strong>Monte Carlo</strong> simulation, to catch p-hacked and
+              overfit trading strategies, flagging false positives with{" "}
+              <strong>68%</strong> accuracy and avoiding{" "}
+              <strong>$2,000</strong> in paper-trading losses.
             </p>
             <ul>
-              <li>TODO — the hard part, and how you handled it.</li>
-              <li>TODO — outcome, scale, or what you learned.</li>
+              <li>
+                Optimized the simulation engine for{" "}
+                <strong>10,000+</strong> simulations per query, estimating
+                price-change distributions conditioned on technical indicators
+                (RSI, moving averages, volatility).
+              </li>
+              <li>
+                Built a query layer with regex parsing that translates
+                SQL-inspired syntax into executable logic.
+              </li>
             </ul>
           </>
         ),
-      },
-      {
-        audio: "/hilbert hotel - so far.ogg",
-        title: "Hilbert Hotel (unreleased)",
-        startAt: 12, // 0:12
-        heading: "TODO — Project Three",
-        body: (
-          <>
-            <p className="font-mono text-[13px] text-zinc-400">
-              TODO — Stack · Year
-            </p>
-            <p>
-              TODO — what this project does, who it&apos;s for, and the problem
-              it solves.
-            </p>
-            <ul>
-              <li>TODO — the hard part, and how you handled it.</li>
-              <li>TODO — outcome, scale, or what you learned.</li>
-            </ul>
-          </>
-        ),
-      },
-      {
-        audio: "/idontwriteforyouanymorefinalmm11.ogg",
-        title: "i don't write for you anymore",
-        startAt: 47, // 0:47
-        heading: "TODO — Project Four",
-        body: (
-          <>
-            <p className="font-mono text-[13px] text-zinc-400">
-              TODO — Stack · Year
-            </p>
-            <p>
-              TODO — what this project does, who it&apos;s for, and the problem
-              it solves.
-            </p>
-            <ul>
-              <li>TODO — the hard part, and how you handled it.</li>
-              <li>TODO — outcome, scale, or what you learned.</li>
-            </ul>
-          </>
-        ),
+        links: [
+          {
+            role: "code",
+            value: "github.com/ryousuf569/SonarQL",
+            href: "https://github.com/ryousuf569/SonarQL",
+          },
+        ],
+        figures: [
+          {
+            src: "/sonarql.png",
+            width: 1156,
+            height: 654,
+            alt:
+              "The SonarQL interface: a query reading SELECT SMA20 FROM NQ WHERE CHANGE=0.5 SIM=1000, with result tiles for mean and median percent change, sample size, p-value 0.15, a 5th/95th band, a panel reading “P-hack value looks safe”, and a ranked list of the strongest indicators for NQ.",
+            caption:
+              "A query and its verdict: 1,000 simulations, p = 0.15, and the strongest indicators ranked by correlation and R².",
+          },
+        ],
       },
     ],
   },
@@ -395,57 +470,55 @@ const DISCS: Disc[] = [
     title: "Links",
     short: "LINKS",
     catalog: "YR-004",
+    blurb: "Email, GitHub, LinkedIn, resume, and the music.",
     hueA: 45,
     hueB: 15,
     accent: 38,
-    tracks: [
+    song: {
+      audio: "/forbearance-mm.ogg",
+      title: "solace (forbearance)",
+      startAt: 45, // 0:45
+    },
+    cards: [
       {
-        audio: "/ladybird-mm1.ogg",
-        title: "lakeshore west (ladybird)",
-        startAt: 42, // 0:42
-        heading: "Professional",
+        id: "professional",
+        heading: "Get in touch",
+        eyebrow: "Waterloo, ON",
         body: (
-          <ul>
-            <li>
-              TODO — GitHub · <span className="text-zinc-400">your-url-here</span>
-            </li>
-            <li>
-              TODO — LinkedIn ·{" "}
-              <span className="text-zinc-400">your-url-here</span>
-            </li>
-            <li>
-              TODO — Email ·{" "}
-              <span className="text-zinc-400">you@example.com</span>
-            </li>
-            <li>
-              TODO — Resume · <span className="text-zinc-400">your-url-here</span>
-            </li>
-          </ul>
+          <p>
+            Email is the surest way to reach me. The resume below is the
+            general ML one; ask if you want the version aimed at something more
+            specific.
+          </p>
         ),
-      },
-      {
-        audio: "/allumettefinalmm.ogg",
-        title: "Allumette Interlude",
-        startAt: 18, // 0:18
-        heading: "Personal",
-        body: (
-          <ul>
-            <li>
-              TODO — Music · <span className="text-zinc-400">your-url-here</span>
-            </li>
-            <li>
-              TODO — Writing · <span className="text-zinc-400">your-url-here</span>
-            </li>
-            <li>
-              TODO — Instagram ·{" "}
-              <span className="text-zinc-400">your-url-here</span>
-            </li>
-            <li>
-              TODO — Anything else ·{" "}
-              <span className="text-zinc-400">your-url-here</span>
-            </li>
-          </ul>
-        ),
+        links: [
+          {
+            role: "email",
+            value: "y2rashid@uwaterloo.ca",
+            href: "mailto:y2rashid@uwaterloo.ca",
+          },
+          {
+            role: "github",
+            value: "github.com/ryousuf569",
+            href: "https://github.com/ryousuf569",
+          },
+          {
+            role: "linkedin",
+            value: "linkedin.com/in/yousuf-rashid-2730122a5",
+            href: "https://www.linkedin.com/in/yousuf-rashid-2730122a5/",
+          },
+          {
+            role: "resume",
+            value: "General ML resume (PDF)",
+            href: "/GENERAL_ML_RESUME.pdf",
+          },
+          {
+            role: "spotify",
+            value: "The music, on Spotify",
+            href:
+              "https://open.spotify.com/artist/46yz0crerAYXpWiSYpkfN7?si=tqfIUnBISKGDMKhqprsBbQ",
+          },
+        ],
       },
     ],
   },
@@ -465,7 +538,7 @@ const discVertexShader = /* glsl */ `
 
 // Single-pass procedural CD face: data-track rings, an iridescent sheen that
 // sweeps with rotation, a label hub and a centre hole. No textures, no render
-// targets — one quad, a few dozen ALU ops per pixel.
+// targets: one quad, a few dozen ALU ops per pixel.
 const discFragmentShader = /* glsl */ `
   precision mediump float;
 
@@ -524,7 +597,7 @@ const discFragmentShader = /* glsl */ `
 
 /**
  * A rejected play() promise says little on its own. When the element also
- * carries a MediaError, that code is the more specific diagnosis — in
+ * carries a MediaError, that code is the more specific diagnosis; in
  * particular SRC_NOT_SUPPORTED, which is what a codec/container mismatch
  * surfaces as.
  */
@@ -586,7 +659,7 @@ function useDiscStage(
   const handleRef = useRef<DiscStageHandle | null>(null);
   // Held in a ref so the effect below never re-runs (and never rebuilds the
   // whole WebGL scene) just because the caller passed a new closure. Updated in
-  // its own effect rather than during render — a render-phase ref write is not
+  // its own effect rather than during render, a render-phase ref write is not
   // safe under concurrent rendering, which may discard the pass.
   const levelsRef = useRef(getLevels);
   useEffect(() => {
@@ -617,7 +690,7 @@ function useDiscStage(
         antialias: true,
       });
     } catch {
-      canvas.remove(); // No WebGL — leave the host empty.
+      canvas.remove(); // No WebGL, so leave the host empty.
       return;
     }
     renderer.setClearAlpha(0);
@@ -687,7 +760,7 @@ function useDiscStage(
     // Gloss black reads as a flat silhouette under diffuse light alone; it
     // needs bright, well-separated sources to make the plastic look wet.
     // The env map above supplies most of the ambient and all the reflections,
-    // so these are lower than they'd need to be on their own — they're here for
+    // so these are lower than they'd need to be on their own. They're here for
     // directional shaping and the crisp speculars, not overall exposure.
     const key = new THREE.DirectionalLight(0xffffff, 1.5);
     key.position.set(3.2, 4.5, 5.0);
@@ -752,7 +825,7 @@ function useDiscStage(
     let lidAngle = 0;
     let discLift = 0;
     let elapsed = 0;
-    // Follower for woofer excursion — see the render loop for why the raw bass
+    // Follower for woofer excursion, see the render loop for why the raw bass
     // band is not used directly.
     let woofer = 0;
 
@@ -799,7 +872,7 @@ function useDiscStage(
       elapsed += dt;
 
       // Note: no early-out on `visible` here. The deck itself is always on
-      // screen — only the disc comes and goes.
+      // screen, only the disc comes and goes.
 
       // Spin up / coast down rather than snapping between rates.
       const target = spinning && !reduceMotion ? 3.4 : 0;
@@ -848,19 +921,19 @@ function useDiscStage(
 
       // Woofer excursion. The cones ride the bass band: a real driver's cone
       // travels along its axis, so this is a Z offset on the cone and dust cap
-      // only — the ring, bezel and surround stay bolted to the cabinet.
+      // only: the ring, bezel and surround stay bolted to the cabinet.
       //
       // Smoothed with its own follower rather than using the raw band value:
       // the analyser is already smoothed, but bass is spiky enough that feeding
       // it straight in makes the cones buzz instead of pump. Attack is faster
-      // than release, which is how a cone actually behaves — it snaps out on the
+      // than release, which is how a cone actually behaves: it snaps out on the
       // transient and settles back.
       {
         const bass = playing ? levelsRef.current().bass : 0;
         const k = bass > woofer ? 0.35 : 0.12;
         woofer += (bass - woofer) * k;
         // Gentle knee: quiet passages barely move, loud ones travel most of the
-        // budget. Excursion is small — 0.05 world units is already several
+        // budget. Excursion is small, 0.05 world units is already several
         // pixels of visible travel at this camera.
         const travel = Math.pow(Math.max(woofer, 0), 1.4) * 0.05;
         for (const w of rig.woofers) {
@@ -886,12 +959,12 @@ function useDiscStage(
 
       // Idle motion: translation only, never rotation. The fascia buttons are
       // HTML hit targets pinned to percentage positions over the modelled caps,
-      // so any yaw/pitch swings the caps out from under their labels — whereas
+      // so any yaw/pitch swings the caps out from under their labels, whereas
       // a translation slides cap and label the same way and only their small
       // difference shows. Budget: at this camera (fov 34, ~5.2 units to the
       // fascia) one world unit is ~176px on a 560px-tall deck, and the caps are
       // 30x66px, so the ~1.5px peak below stays comfortably on the cap face.
-      // Keep total amplitude under ~0.01 — 0.018 is 3px+ and starts to show.
+      // Keep total amplitude under ~0.01; 0.018 is 3px+ and starts to show.
       if (!reduceMotion) {
         // Two periods that don't divide evenly, so the deck wanders instead of
         // pumping on a metronome.
@@ -914,7 +987,7 @@ function useDiscStage(
       // Renderer disposal does not cascade to scene contents.
       d.disposeAll();
       renderer.dispose();
-      // Required as of Next 16 — dispose() alone does not release the context
+      // Required as of Next 16: dispose() alone does not release the context
       // across the App Router's remount cycle, and browsers cap live contexts.
       renderer.forceContextLoss();
       // The context above is now unusable, so the element goes with it. The
@@ -952,7 +1025,7 @@ function useBackground(
   return handleRef;
 }
 
-/** Hue used with nothing loaded — the page's resting cool blue. */
+/** Hue used with nothing loaded, the page's resting cool blue. */
 const IDLE_ACCENT = 210;
 
 /**
@@ -985,7 +1058,7 @@ function useAccentHue(target: number): number {
     const start = performance.now();
     const step = (now: number) => {
       const t = duration === 0 ? 1 : Math.min((now - start) / duration, 1);
-      // easeInOutCubic — matches the unhurried feel of the deck's transitions.
+      // easeInOutCubic, matches the unhurried feel of the deck's transitions.
       const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
       const v = (((from + delta * e) % 360) + 360) % 360;
       hueRef.current = v;
@@ -1011,8 +1084,8 @@ const SILENT: Levels = { bass: 0, mid: 0, treble: 0 };
 
 export default function Home() {
   // The backdrop owns the AudioContext and analyser, so it is created first and
-  // the deck reads its levels. Only one graph can exist per audio element —
-  // createMediaElementSource throws on a second call — so this is the single
+  // the deck reads its levels. Only one graph can exist per audio element,
+  // createMediaElementSource throws on a second call, so this is the single
   // source of band data for everything on the page.
   const bgHostRef = useRef<HTMLDivElement>(null);
   const background = useBackground(bgHostRef);
@@ -1033,9 +1106,11 @@ export default function Home() {
 
   // Which disc is selected in the rack. Null = tray is empty.
   const [loaded, setLoaded] = useState<number | null>(null);
-  // Which song on that disc is cued. Skip/Prev move this; only eject-and-load
-  // changes `loaded`, so the transport can never walk off the current disc.
-  const [trackIndex, setTrackIndex] = useState(0);
+  // Which card of that disc is face-up. Next/Prev move this: with one song per
+  // disc there is nothing to skip *to* musically, so the transport pages
+  // through the section's content instead, which is the thing a visitor
+  // actually wants to advance.
+  const [cardIndex, setCardIndex] = useState(0);
   const [status, setStatus] = useState<Status>("empty");
   // Tray open state drives both the CSS drawer and the WebGL eject offset.
   const [trayOpen, setTrayOpen] = useState(true);
@@ -1044,13 +1119,22 @@ export default function Home() {
   // pointer is over the deck. Both are presentation-only.
   const [dragging, setDragging] = useState<number | null>(null);
   const [dragOverDeck, setDragOverDeck] = useState(false);
+  // Which section the pointer is over in the empty-state picker. Lights the
+  // matching disc in the rack, so a visitor sees that the named card and the
+  // small iridescent disc are the same thing, which is what makes the rack
+  // legible as a control afterwards.
+  const [hoveredDisc, setHoveredDisc] = useState<number | null>(null);
 
   const disc = loaded === null ? null : DISCS[loaded];
+  const song = disc ? disc.song : null;
   // Clamped, because a disc swap can land here for a render before the index
-  // reset commits — a shorter disc would otherwise index past its track list.
-  const track = disc
-    ? disc.tracks[Math.min(trackIndex, disc.tracks.length - 1)]
+  // reset commits, a shorter disc would otherwise index past its card list.
+  const card = disc
+    ? disc.cards[Math.min(cardIndex, disc.cards.length - 1)]
     : null;
+  const safeCardIndex = disc
+    ? Math.min(cardIndex, disc.cards.length - 1)
+    : 0;
 
   // The page's single accent hue, eased on every disc swap. Everything that
   // used to be hardcoded cyan reads from this, so both columns and the backdrop
@@ -1058,11 +1142,6 @@ export default function Home() {
   const accentHue = useAccentHue(disc ? disc.accent : IDLE_ACCENT);
   const accent = (s: number, l: number, a = 1) =>
     `hsl(${accentHue.toFixed(1)} ${s}% ${l}% / ${a})`;
-
-  // Which track's booklet is open as a modal, or null for none. Separate from
-  // `trackIndex`: reading a booklet does not change what the deck is playing,
-  // so you can read about one track while another is audible.
-  const [openTrack, setOpenTrack] = useState<number | null>(null);
 
   // Playback position, for the transport bar. Driven by timeupdate rather than
   // a rAF loop: the browser fires it ~4x/sec, which is plenty for a progress
@@ -1114,19 +1193,25 @@ export default function Home() {
   };
 
   /**
-   * Load a disc from the rack: close the tray and cue it up, stopped. Which
-   * song you land on is random, so re-inserting a disc isn't the same listen
-   * twice — Skip then walks the rest of the disc in order from there.
+   * Load a disc from the rack: close the tray and cue it up, stopped. Always
+   * lands on the section's first card, because a section reads in order and starting
+   * anywhere else would drop the visitor mid-argument.
    */
   const insert = useCallback((index: number) => {
     setLoaded(index);
-    setTrackIndex(Math.floor(Math.random() * DISCS[index].tracks.length));
+    setCardIndex(0);
     setStatus("loaded");
     setTrayOpen(false);
     setAudioError(null);
-    // A booklet from the previous disc must not survive the swap — its index
-    // would point into a different (possibly shorter) track list.
-    setOpenTrack(null);
+    // Return to the top of the document. On a phone the picker is a tall
+    // scrolling block, so a visitor is usually part-way down it when they tap a
+    // section; the browser preserves that scroll offset across the swap and the
+    // card, which is shorter than the picker was, ends up above the viewport.
+    // The result looks like tapping did nothing. Desktop is unaffected: the
+    // columns sit side by side and the page does not scroll.
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
   }, []);
 
   const eject = useCallback(() => {
@@ -1135,34 +1220,32 @@ export default function Home() {
     setTrayOpen(true);
     setStatus("empty");
     setLoaded(null);
-    setTrackIndex(0);
+    setCardIndex(0);
     setAudioError(null);
-    // Nothing loaded means nothing to read.
-    setOpenTrack(null);
   }, []);
 
   const play = useCallback(() => {
     const el = audioRef.current;
-    if (!el || !track) return;
+    if (!el || !song) return;
     setTrayOpen(false);
 
     // Attach the analyser here rather than in an effect: this runs inside the
-    // click, and an AudioContext built outside a user gesture starts suspended
-    // — which yields a silent graph rather than an error.
+    // click, and an AudioContext built outside a user gesture starts
+    // suspended, which yields a silent graph rather than an error.
     background.current?.connectAudio(el);
 
-    // No cueing here — the disc-change effect already positions a freshly
+    // No cueing here: the disc-change effect already positions a freshly
     // inserted disc at its start offset, and Stop rewinds to it. Re-cueing on
     // every Play would drag the listener forward to the offset after the
-    // track had looped back to 0:00.
+    // song had looped back to 0:00.
     // If the element hasn't fetched anything yet (preload="none", or a src
     // swap that hasn't resolved), kick off the load and cue once metadata
     // lands. play() on an unloaded element is what produced the "no supported
-    // sources" error — the source was fine, it just hadn't been fetched.
+    // sources" error; the source was fine, it just hadn't been fetched.
     if (el.readyState === 0) {
       const onMeta = () => {
-        if (track.startAt > 0 && track.startAt < el.duration) {
-          el.currentTime = track.startAt;
+        if (song.startAt > 0 && song.startAt < el.duration) {
+          el.currentTime = song.startAt;
         }
         el.play()
           .then(() => {
@@ -1185,77 +1268,14 @@ export default function Home() {
         setAudioError(describeMediaError(err, el));
       });
     // `background` is a ref, so reading .current here is not a reactive
-    // dependency — exactly like `audioRef` above, which the rule does not flag
+    // dependency, exactly like `audioRef` above, which the rule does not flag
     // because it is a direct useRef rather than one returned from a custom hook.
     // Listing it instead is an error under preserve-manual-memoization, so the
     // two rules cannot both be satisfied; omitting is the correct half.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track]);
+  }, [song]);
 
-  /**
-   * Cue a specific song on the loaded disc and play it — what clicking a case
-   * on the shelf does.
-   *
-   * Deliberately does NOT call `play()`. That callback closes over `track`,
-   * which is derived from `trackIndex`, so calling it in the same handler that
-   * moves the index would start the track we just navigated away from. Instead
-   * this sets the index and declares the intent to play; the track-change effect
-   * below sees the new src, fetches it, cues it to its start offset and — because
-   * statusRef now reads "playing" — starts it. That is the same path Skip and
-   * Prev already take mid-listen.
-   *
-   * The one thing that must happen inside the click is the analyser hookup: an
-   * AudioContext constructed outside a user gesture starts suspended, which
-   * yields a silent graph rather than an error.
-   */
-  const selectTrack = useCallback((index: number) => {
-    const el = audioRef.current;
-    if (!el || !disc) return;
-    if (index < 0 || index >= disc.tracks.length) return;
-
-    background.current?.connectAudio(el);
-    setTrayOpen(false);
-    setAudioError(null);
-
-    // Same song, currently playing: treat the click as a no-op rather than
-    // restarting it from the cue point mid-listen.
-    if (index === trackIndex && statusRef.current === "playing") return;
-
-    setTrackIndex(index);
-    // statusRef is updated here as well as through state, because the effect
-    // reads the ref synchronously when the src change lands — which can happen
-    // before the status state has committed.
-    statusRef.current = "playing";
-    setStatus("playing");
-
-    // Already the cued track, so the src does not change and the track-change
-    // effect will not re-run — start it here instead.
-    if (index === trackIndex) {
-      const t = disc.tracks[index];
-      const start = () => {
-        if (t.startAt > 0 && t.startAt < el.duration) {
-          el.currentTime = t.startAt;
-        }
-        el.play().catch((err: unknown) => {
-          setAudioError(describeMediaError(err, el));
-          setStatus("loaded");
-        });
-      };
-      if (el.readyState === 0) {
-        // Nothing fetched yet (preload="none"): play() before metadata lands
-        // fails with "no supported sources", so wait for the load.
-        el.addEventListener("loadedmetadata", start, { once: true });
-        el.load();
-      } else {
-        start();
-      }
-    }
-    // `background` is a ref; see the note on `play` above for why it is not
-    // listed as a dependency.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [disc, trackIndex]);
-
-  /** Pause holds position; Stop rewinds to the current song's cue point. */
+  /** Pause holds position; Stop rewinds to the song's cue point. */
   const pause = useCallback(() => {
     const el = audioRef.current;
     if (el) el.pause();
@@ -1264,34 +1284,30 @@ export default function Home() {
 
   const stop = useCallback(() => {
     const el = audioRef.current;
-    if (el && track) {
+    if (el && song) {
       el.pause();
-      el.currentTime = track.startAt;
+      el.currentTime = song.startAt;
     }
     setStatus(disc ? "loaded" : "empty");
-  }, [disc, track]);
+  }, [disc, song]);
 
   /**
-   * Skip and Prev move between songs on the loaded disc and wrap within it —
-   * they never change discs. Swapping discs is a physical act: eject, then
-   * drag or click another one in. With nothing loaded there's nothing to skip.
+   * Next and Prev flip through the loaded disc's cards and wrap within it,
+   * they never change discs, and they never touch playback. The song is the
+   * section's backing track: it keeps running while you read.
    */
-  const skip = useCallback(() => {
+  const nextCard = useCallback(() => {
     if (!disc) return;
-    setTrackIndex((i) => (i + 1) % disc.tracks.length);
-    setAudioError(null);
-    // Keep playing across a skip if we were already playing; the effect below
-    // starts the new track once the element has swapped sources.
+    setCardIndex((i) => (i + 1) % disc.cards.length);
   }, [disc]);
 
-  const prevTrack = useCallback(() => {
+  const prevCard = useCallback(() => {
     if (!disc) return;
-    setTrackIndex((i) => (i - 1 + disc.tracks.length) % disc.tracks.length);
-    setAudioError(null);
+    setCardIndex((i) => (i - 1 + disc.cards.length) % disc.cards.length);
   }, [disc]);
 
-  // When the source changes, cue to the new disc's offset. If we were
-  // playing, continue playing the new track.
+  // When the source changes, cue the new disc's song to its offset. If we were
+  // playing, keep playing across the swap.
   //
   // Seeking has to wait for metadata: with preload="none" a freshly-swapped
   // src has readyState 0 and no known duration, so assigning currentTime
@@ -1300,15 +1316,15 @@ export default function Home() {
   // the element can actually be positioned.
   useEffect(() => {
     const el = audioRef.current;
-    if (!el || !track) return;
+    if (!el || !song) return;
 
     const shouldResume = statusRef.current === "playing";
     let cancelled = false;
 
     const onMeta = () => {
       if (cancelled) return;
-      if (track.startAt > 0 && track.startAt < el.duration) {
-        el.currentTime = track.startAt;
+      if (song.startAt > 0 && song.startAt < el.duration) {
+        el.currentTime = song.startAt;
       }
       if (shouldResume) {
         el.play().catch((err: unknown) => {
@@ -1325,13 +1341,12 @@ export default function Home() {
       el.removeEventListener("loadedmetadata", onMeta);
     };
     // Keyed on the audio source only: re-running on every status change would
-    // re-cue mid-listen. statusRef carries the latest status without
-    // retriggering. Skipping to another song on the same disc changes this key,
-    // so the new song is fetched and cued exactly like a fresh insert.
+    // re-cue mid-listen, and flipping cards must not disturb playback at all.
+    // statusRef carries the latest status without retriggering.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track?.audio]);
+  }, [song?.audio]);
 
-  // Loop back to 0:00 when a track runs out, per the brief — the start offset
+  // Loop back to 0:00 when the song runs out, per the brief, the start offset
   // is a one-time cue, not a loop point.
   const onEnded = useCallback(() => {
     const el = audioRef.current;
@@ -1350,7 +1365,7 @@ export default function Home() {
       {/* ================= BACKGROUND: one field for the whole page ========= */}
       {/* Spans both columns. Fixed, not absolute: on the mobile layout the two
           sections stack and the document grows taller than the viewport, and an
-          absolute host would stretch to that full height — scaling the scene to
+          absolute host would stretch to that full height, scaling the scene to
           a very tall aspect and scrolling away with the content. Fixed keeps it
           locked to the viewport at a sane aspect ratio.
 
@@ -1365,41 +1380,75 @@ export default function Home() {
       {/* ================= LEFT: the deck and the disc rack ================= */}
       {/* No divider of any kind. The reactive field now spans the whole page
           rather than living in the right column, so there are no longer two
-          backgrounds to reconcile — the columns are just content over one
+          backgrounds to reconcile. The columns are just content over one
           continuous space. */}
-      <section className="relative z-10 flex shrink-0 flex-col items-center gap-6 px-6 py-8 lg:w-[720px] lg:py-10">
-        {/* Instructions. First thing read on the page — the deck is only
-            obvious once you know a disc has to go into it. */}
+      {/* Always order-2 on mobile: the content leads and the deck follows.
+          Stacked, this column is a screenful of hardware, so putting it first
+          (which an earlier revision did once a disc was loaded) pushed the card
+          you are meant to read entirely below the fold. The deck is the
+          instrument; the cards are the point. Desktop (lg) puts them
+          side-by-side, where the question does not arise. */}
+      <section
+        className="relative z-10 order-2 flex shrink-0 flex-col items-center gap-6 px-6 py-8 lg:order-1 lg:w-[720px] lg:py-10"
+      >
+        {/* Who this is, then what to do. The old heading led with "Drag a disc
+            into the player". Drag is the fiddliest way in, and putting it
+            first made the page look like it demanded a knack. The picker on the
+            right is now the instruction; this is identification. */}
         <div className="w-full max-w-[640px]">
-          <h2 className="text-2xl font-semibold leading-snug tracking-tight text-white sm:text-[28px]">
-            Drag a disc into the player.
-          </h2>
-          <p className="mt-2 text-base leading-relaxed text-zinc-400 sm:text-lg">
-            Hit{" "}
-            <span
-              className="font-semibold"
-              style={{ color: accent(85, 70) }}
-            >
-              Play
-            </span>{" "}
-            to hear it,{" "}
-            <span
-              className="font-semibold"
-              style={{ color: accent(85, 70) }}
-            >
-              Next
-            </span>{" "}
-            for another track, and read along on the right.
-          </p>
+          <h1 className="text-2xl font-semibold leading-snug tracking-tight text-white sm:text-[28px]">
+            Yousuf Rashid
+          </h1>
+          {/* Two states. With nothing loaded this says who I am, because the
+              picker on the right is already saying what to do and two
+              instructions competing for the same moment is how a visitor ends
+              up reading neither. Once a disc is in, it becomes the legend for
+              the controls they now have. */}
+          {disc ? (
+            /* Desktop only. On a phone the fascia buttons this sentence names
+               are hidden and the deck sits far below the fold, so naming them
+               here points the visitor at controls they cannot see. The touch
+               transport up beside the card is self-labelling, so the phone gets
+               the deck as an object to look at rather than a legend. */
+            <p className="mt-2 hidden text-base leading-relaxed text-zinc-400 sm:block sm:text-lg">
+              Hit{" "}
+              <span className="font-semibold" style={{ color: accent(85, 70) }}>
+                {status === "playing" ? "Pause" : "Play"}
+              </span>{" "}
+              for the song,{" "}
+              <span className="font-semibold" style={{ color: accent(85, 70) }}>
+                Next
+              </span>{" "}
+              to flip through the cards, and{" "}
+              <span className="font-semibold" style={{ color: accent(85, 70) }}>
+                Eject
+              </span>{" "}
+              to change section.
+            </p>
+          ) : (
+            <p className="mt-2 text-base leading-relaxed text-zinc-400 sm:text-lg">
+              Applied Mathematics at Waterloo, specializing in scientific machine learning.
+              Every section comes with a song.
+            </p>
+          )}
         </div>
 
         {/* The deck. The 3D model carries the controls; the overlay keeps them
             reachable by keyboard and screen reader, and the wrapper is the drop
             target for discs dragged out of the rack. */}
+        {/* isolate + the clip below: the glow washes inside bleed past this box
+            by design (-inset-8), which on a narrow viewport pushed the document
+            8px wider than the screen and left the whole page scrollable
+            sideways. Clipping the bleed here keeps the effect and kills the
+            scroll; the washes are all decorative, so nothing is lost. */}
         <div
-          className="relative mt-2 h-[480px] w-full max-w-[720px] rounded-2xl ring-2 transition-colors sm:mt-4 sm:h-[560px]"
+          // 320px on a phone, not 480: at 480 the deck alone was more than half
+          // an 844px screen, which is what buried the content. The model is
+          // framed by the camera rather than cropped, so a shorter box just
+          // shows a smaller deck.
+          className="relative isolate mt-2 h-[320px] w-full max-w-[720px] overflow-hidden rounded-2xl ring-2 transition-colors sm:mt-4 sm:h-[480px] lg:h-[560px]"
           style={{
-            // Drop-target highlight, in the hue of whichever disc is in hand —
+            // Drop-target highlight, in the hue of whichever disc is in hand,
             // so the feedback matches the thing being dragged.
             backgroundColor: dragOverDeck
               ? `hsl(${dragging !== null ? DISCS[dragging].accent : accentHue} 85% 55% / 0.08)`
@@ -1441,7 +1490,7 @@ export default function Home() {
               opacity 0 when idle so loading a disc fades the colour up rather
               than popping it in; playing brightens it and starts the breath.
               Two layers: a broad ambient bloom, and a tighter core behind the
-              deck itself. Alphas are deliberately high — against the near-black
+              deck itself. Alphas are deliberately high. Against the near-black
               #0e0f13 page a subtle wash reads as nothing at all. */}
           <div
             aria-hidden="true"
@@ -1459,7 +1508,7 @@ export default function Home() {
               filter: "blur(46px)",
             }}
           />
-          {/* The stage appends its own canvas here — see useDiscStage. */}
+          {/* The stage appends its own canvas here, see useDiscStage. */}
           <div ref={stageHostRef} className="absolute inset-0" />
 
           {/* Floor spill: a hot elliptical pool directly under the deck, so the
@@ -1524,15 +1573,21 @@ export default function Home() {
               pointer-events-none on the wrapper is essential: it spans the
               whole deck, and without it the group swallows every drag/drop
               over the canvas. The buttons re-enable pointer events. */}
+          {/* Hidden below sm: these are pinned to the modelled caps as
+              percentages, so on a 320px-tall deck they shrink to roughly
+              20x40px, well under the 44px minimum touch target, and they sit
+              on a canvas a thumb cannot aim at precisely. Phones get the
+              TouchTransport bar below the deck instead, which is the same five
+              actions at a tappable size. */}
           <div
-            className="pointer-events-none absolute inset-0 [&>button]:pointer-events-auto"
+            className="pointer-events-none absolute inset-0 hidden [&>button]:pointer-events-auto sm:block"
             role="group"
             aria-label="CD deck transport controls"
           >
             {/* Positions are the modelled caps' own projected screen
                 coordinates (measured, not eyeballed) expressed as percentages,
                 so the labels stay on their caps at every deck size. The deck is
-                held square to the camera for the same reason — see the render
+                held square to the camera for the same reason, see the render
                 loop. Each label is bound to the cap it physically sits on. */}
             <FasciaButton
               className="left-[42.33%] top-[56.61%] h-[30px] w-[66px] -translate-x-1/2 -translate-y-1/2"
@@ -1546,11 +1601,11 @@ export default function Home() {
             />
             <FasciaButton
               className="left-[57.67%] top-[56.61%] h-[30px] w-[66px] -translate-x-1/2 -translate-y-1/2"
-              label="Skip to next song on this disc"
+              label="Next card on this disc"
               glyph="▶▶"
               caption="Next"
-              disabled={!disc || disc.tracks.length < 2}
-              onClick={() => pressControl("play", skip)}
+              disabled={!disc || disc.cards.length < 2}
+              onClick={() => pressControl("play", nextCard)}
             />
             <FasciaButton
               className="left-[42.44%] top-[61.38%] h-[30px] w-[66px] -translate-x-1/2 -translate-y-1/2"
@@ -1562,11 +1617,11 @@ export default function Home() {
             />
             <FasciaButton
               className="left-[57.56%] top-[61.38%] h-[30px] w-[66px] -translate-x-1/2 -translate-y-1/2"
-              label="Previous song on this disc"
+              label="Previous card on this disc"
               glyph="◀◀"
               caption="Prev"
-              disabled={!disc || disc.tracks.length < 2}
-              onClick={() => pressControl("next", prevTrack)}
+              disabled={!disc || disc.cards.length < 2}
+              onClick={() => pressControl("next", prevCard)}
             />
             {/* Eject lives on the deck itself, on the centre cap below the
                 display. Disabled with nothing loaded so it can't imply an
@@ -1582,24 +1637,33 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Phone transport. The modelled fascia is unusable at thumb size, so
+            below sm the same five actions get real buttons. */}
+        <TouchTransport
+          playing={status === "playing"}
+          hasDisc={!!disc}
+          accentHue={accentHue}
+          onPlayPause={() =>
+            pressControl("power", status === "playing" ? pause : play)
+          }
+          onStop={() => pressControl("prev", stop)}
+          onEject={() => pressControl("eject", eject)}
+        />
+
         {/* Transport bar. The deck's own controls are modelled geometry with no
             readout, so this is the only place the machine says what it is
-            playing and how far in. Monospace, small, low contrast — it reads as
+            playing and how far in. Monospace, small, low contrast, it reads as
             equipment labelling rather than UI chrome. */}
         <TransportBar
-          title={track ? track.title : null}
+          title={song ? song.title : null}
           discTitle={disc ? disc.title : null}
-          trackNumber={
-            disc ? Math.min(trackIndex, disc.tracks.length - 1) + 1 : 0
-          }
-          trackCount={disc ? disc.tracks.length : 0}
           elapsed={elapsed}
           duration={duration}
           playing={status === "playing"}
           accentHue={accentHue}
         />
 
-        {/* Disc rack — draggable CDs. Clicking still loads, so the deck is
+        {/* Disc rack, draggable CDs. Clicking still loads, so the deck is
             fully usable without ever dragging. */}
         <div className="flex w-full max-w-[640px] flex-col items-center gap-3">
           <div className="flex flex-wrap justify-center gap-4">
@@ -1612,7 +1676,12 @@ export default function Home() {
                 // Spread the four discs across the 5s float cycle.
                 floatDelay={i * 1.25}
                 dragging={dragging === i}
+                // Lit while its section is hovered in the picker, so the named
+                // card and this disc read as the same object.
+                highlighted={hoveredDisc === i}
                 onClick={() => insert(i)}
+                onPointerEnter={() => setHoveredDisc(i)}
+                onPointerLeave={() => setHoveredDisc(null)}
                 onDragStart={() => setDragging(i)}
                 onDragEnd={() => {
                   setDragging(null);
@@ -1621,8 +1690,12 @@ export default function Home() {
               />
             ))}
           </div>
+          {/* Names the rack rather than repeating the instruction: with the
+              picker on the right carrying the call to action, a third "drag a
+              disc" line was just noise. Once a disc is loaded this is the only
+              visible way to switch, so it says so then. */}
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-400">
-            Drag a disc into the deck — or click it
+            {disc ? "Click another disc to switch" : "The rack: click or drag"}
           </p>
         </div>
 
@@ -1633,66 +1706,44 @@ export default function Home() {
         )}
       </section>
 
-      {/* ================= RIGHT: the booklet =============================== */}
+      {/* ================= RIGHT: the cards ================================ */}
       {/* The section is the positioning context and does NOT scroll: an
           absolutely-positioned child of a scroll container is anchored to the
           content box, so anything pinned inside it would stretch to the full
           content height and scroll away. Scrolling moves to the inner wrapper. */}
-      <section className="relative z-10 flex flex-1 overflow-hidden">
-        {/* A shelf of jewel cases, one per track on the loaded disc. The case is
-            the thing you browse; the booklet inside it is the thing you read, and
-            it opens over the page rather than living beside it. */}
+      <section className="relative z-10 order-1 flex flex-1 overflow-hidden lg:order-2">
+        {/* The loaded disc's content, one card at a time. Reading happens here,
+            beside the deck, not in a modal over it. */}
         <div className="relative z-10 flex w-full flex-col overflow-y-auto py-6 pl-4 pr-10 sm:py-10 sm:pl-8 sm:pr-14 lg:py-14 lg:pl-10 lg:pr-16">
-          {disc ? (
-            <div className="m-auto w-full max-w-3xl">
-              <div className="mb-1 flex items-baseline justify-between gap-4 font-mono text-[10px] uppercase tracking-[0.24em]">
-                <span style={{ color: accent(75, 66, 0.95) }}>
-                  {disc.title}
-                </span>
-                <span className="text-zinc-500">{disc.catalog}</span>
-              </div>
-              <p className="mb-7 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-400">
-                {disc.tracks.length} track
-                {disc.tracks.length === 1 ? "" : "s"} · click a case to play it
-                and open its booklet
-              </p>
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                {disc.tracks.map((t, i) => (
-                  <CaseCard
-                    key={t.audio}
-                    track={t}
-                    disc={disc}
-                    trackNumber={i + 1}
-                    accentHue={accentHue}
-                    // The case for the cued track is marked, so the shelf and
-                    // the transport agree on what the deck is playing.
-                    current={i === Math.min(trackIndex, disc.tracks.length - 1)}
-                    onOpen={() => {
-                      // Clicking a case does both: cues and plays that song, and
-                      // opens its booklet. The case is the record — picking one
-                      // up is how you put it on.
-                      selectTrack(i);
-                      setOpenTrack(i);
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
+          {disc && card ? (
+            <CardDeck
+              disc={disc}
+              index={safeCardIndex}
+              accentHue={accentHue}
+              onNext={nextCard}
+              onPrev={prevCard}
+              onSelect={setCardIndex}
+            />
           ) : (
-            <div className="m-auto max-w-md text-center">
-              <div className="mb-3 font-mono text-[11px] uppercase tracking-[0.28em] text-zinc-400">
-                No disc
-              </div>
-              <p className="text-lg text-zinc-400">
-                Load a disc to see its cases.
-              </p>
-            </div>
+            /* Nothing loaded. This half of the page used to say "Load a disc"
+               and stop there, a instruction with nothing to act on, in the
+               largest empty area on screen. It is now the primary call to
+               action: the four sections, named, with what is inside them, each
+               one loading its disc on click. The rack below the deck still
+               works and still drags; this is the obvious path for a visitor
+               who has not realised those small discs are buttons. */
+            <SectionPicker
+              accentHue={accentHue}
+              onPick={insert}
+              hoveredDisc={hoveredDisc}
+              onHoverDisc={setHoveredDisc}
+            />
           )}
         </div>
 
-        {/* Spine strip down the far edge, as a jewel case spine: section name
-            set vertically in small caps plus the catalogue number. Always
-            visible, and it gives the dead margin a job. */}
+        {/* Spine strip down the far edge, like the spine of a case on a shelf:
+            section name set vertically in small caps plus the catalogue
+            number. Always visible, and it gives the dead margin a job. */}
         <div
           aria-hidden="true"
           className="absolute inset-y-0 right-0 z-20 hidden w-10 items-center justify-center border-l border-white/10 bg-black/40 sm:flex"
@@ -1708,31 +1759,18 @@ export default function Home() {
             <span style={{ color: accent(70, 68, 0.9) }}>
               {disc ? disc.title : "No disc"}
             </span>
-            <span className="text-zinc-500">
+            <span className="text-zinc-400">
               {disc ? disc.catalog : "YR-000"}
             </span>
           </div>
         </div>
       </section>
 
-      {/* The booklet, opened over the page. Everything behind it dims and
-          blurs, so the paper is unambiguously the thing in focus. */}
-      {disc && openTrack !== null && disc.tracks[openTrack] && (
-        <BookletModal
-          disc={disc}
-          track={disc.tracks[openTrack]}
-          trackNumber={openTrack + 1}
-          trackCount={disc.tracks.length}
-          accentHue={accentHue}
-          onClose={() => setOpenTrack(null)}
-        />
-      )}
-
-      {/* preload="none" — the library shouldn't be fetched until a disc is
+      {/* preload="none", the library shouldn't be fetched until a disc is
           actually loaded into the deck. */}
       <audio
         ref={audioRef}
-        src={track ? track.audio : undefined}
+        src={song ? song.audio : undefined}
         onError={() => {
           const el = audioRef.current;
           if (el) setAudioError(describeMediaError(null, el));
@@ -1740,7 +1778,7 @@ export default function Home() {
         onEnded={onEnded}
         onTimeUpdate={(e) => setElapsed(e.currentTarget.currentTime)}
         // Duration is only known once metadata lands, and it changes with every
-        // track swap — read it here rather than caching per track.
+        // disc swap, read it here rather than caching per song.
         onLoadedMetadata={(e) => {
           const d = e.currentTarget.duration;
           setDuration(Number.isFinite(d) ? d : 0);
@@ -1765,27 +1803,28 @@ export default function Home() {
           0%, 100% { transform: translateY(0); }
           50%      { transform: translateY(-5px); }
         }
-        /* The loaded disc turns while its track runs. */
+        /* The loaded disc turns while its song runs. */
         @keyframes discSpin {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
         }
-        /* The booklet coming out of the case: scales up from slightly small and
-           lifts, so it reads as the insert being pulled toward you rather than a
-           panel fading in. */
-        @keyframes bookletOpen {
-          from { opacity: 0; transform: scale(0.965) translateY(10px); }
+        /* A card coming to the top of the stack: rises and settles, so a flip
+           reads as the next card being dealt rather than the text swapping in
+           place. Short, this fires on every flip, and anything slower makes
+           paging through a section feel sluggish. */
+        @keyframes cardIn {
+          from { opacity: 0; transform: translateY(10px) scale(0.99); }
           to   { opacity: 1; transform: none; }
         }
-        /* Serif stack for booklet body copy. No webfont: the booklet wants a
-           book face, and every platform already ships one that suits — loading
-           another file for it would cost a request and a layout shift. */
-        .booklet-page :is(.font-serif, p, li, dd) {
+        /* Old-style figures and proper kerning for the card's serif standfirst.
+           No webfont: every platform already ships a book face that suits, and
+           loading one would cost a request and a layout shift. */
+        .portfolio-card :is(.font-serif, p, li, dd) {
           font-feature-settings: "kern" 1, "liga" 1, "onum" 1;
         }
         @media (prefers-reduced-motion: reduce) {
           .rack-disc, .rack-disc-platter { animation: none !important; }
-          .booklet-page { animation: none !important; }
+          .portfolio-card { animation: none !important; }
         }
       `}</style>
     </div>
@@ -1793,434 +1832,504 @@ export default function Home() {
 }
 
 /**
- * One jewel case on the shelf — a real 3D object, and the button that opens the
- * track's booklet.
+ * The empty state, and the page's primary call to action.
  *
- * The <button> owns all interaction; the WebGL canvas inside it is decorative
- * and pointer-transparent. That split is deliberate: the case has to be
- * keyboard-reachable and announce itself to a screen reader, and none of that
- * comes free from a canvas. It also means hover/focus state is driven by real
- * DOM events rather than raycasting.
+ * With nothing loaded this column previously held the words "Load a disc to
+ * read its cards", an instruction with nothing to act on, occupying the
+ * largest clear area on the page. The four discs that *are* the entry point sat
+ * small and unlabelled at the bottom of the other column, so a visitor had to
+ * work out both that they were buttons and what was inside them.
+ *
+ * So the instruction becomes the control: each section named, with a line on
+ * what it contains and how many cards, loading its disc on click. Hovering one
+ * lights the matching disc in the rack, which is what teaches the rack for the
+ * second visit.
  */
-function CaseCard({
-  track,
-  disc,
-  trackNumber,
+function SectionPicker({
   accentHue,
-  current,
-  onOpen,
+  onPick,
+  hoveredDisc,
+  onHoverDisc,
 }: {
-  track: Track;
-  disc: Disc;
-  trackNumber: number;
   accentHue: number;
-  current: boolean;
-  onOpen: () => void;
+  onPick: (index: number) => void;
+  hoveredDisc: number | null;
+  onHoverDisc: (index: number | null) => void;
 }) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const handleRef = useRef<CaseHandle | null>(null);
-  // Falls back to the first plate when no explicit cover is set, so a track
-  // with a figure never needs the path written twice.
-  const cover = track.cover ?? track.plates?.[0]?.src ?? null;
-  const eyebrow = `${disc.catalog} · ${String(trackNumber).padStart(2, "0")}`;
-
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-    const h = createCase(host, {
-      title: track.heading,
-      eyebrow,
-      cover,
-      coverFit: track.coverFit ?? "cover",
-      accentHue,
-    });
-    handleRef.current = h;
-    return () => {
-      handleRef.current = null;
-      h?.dispose();
-    };
-    // Rebuilt only when the printed content changes. accentHue is pushed
-    // through setAccent below instead, because rebuilding the whole case (and
-    // its WebGL context) on every frame of the 800ms hue tween would be absurd.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track.heading, eyebrow, cover, track.coverFit]);
-
-  useEffect(() => {
-    handleRef.current?.setAccent(accentHue);
-  }, [accentHue]);
+  const accent = (s: number, l: number, a = 1) =>
+    `hsl(${accentHue.toFixed(1)} ${s}% ${l}% / ${a})`;
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      onPointerEnter={() => handleRef.current?.setHover(true)}
-      onPointerLeave={() => handleRef.current?.setHover(false)}
-      onFocus={() => handleRef.current?.setHover(true)}
-      onBlur={() => handleRef.current?.setHover(false)}
-      aria-label={`${track.heading} — play “${track.title}” and open booklet`}
-      className="group relative block w-full cursor-pointer rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-    >
-      {/* Fixed aspect box for the canvas. The case model is framed to fill it. */}
-      <div
-        ref={hostRef}
-        aria-hidden="true"
-        className="pointer-events-none relative aspect-[4/3.4] w-full"
-      />
-      {/* Text label under the case. The cover art carries the title in 3D, but
-          that is a texture — this is the accessible, selectable, always-legible
-          version, and it is what a screen reader and a text search will find.
-          The CUED flag leads rather than trails: as a trailing item a long title
-          truncating beside it pushed the flag away from its own case, which read
-          as belonging to the neighbouring one. */}
-      <div className="mt-1 flex items-baseline gap-2 px-1">
-        {current && (
-          <span
-            className="shrink-0 font-mono text-[9px] uppercase tracking-[0.16em]"
-            style={{ color: accent2(accentHue, 80, 68) }}
-          >
-            Cued
-          </span>
-        )}
-        <span className="min-w-0 truncate font-mono text-[11px] text-zinc-300 transition-colors group-hover:text-white">
-          {track.heading}
-        </span>
-      </div>
-    </button>
-  );
-}
-
-/** hsl() helper for components that receive a hue rather than the page's own. */
-function accent2(hue: number, s: number, l: number, a = 1) {
-  return `hsl(${hue.toFixed(1)} ${s}% ${l}% / ${a})`;
-}
-
-/**
- * The booklet as a modal card: the paper over a dimmed, blurred page.
- *
- * Focus is moved into the dialog on open and the page behind is inert to
- * scrolling, because a scrollable backdrop under an open modal is the classic
- * way this pattern goes wrong.
- */
-function BookletModal({
-  disc,
-  track,
-  trackNumber,
-  trackCount,
-  accentHue,
-  onClose,
-}: {
-  disc: Disc;
-  track: Track;
-  trackNumber: number;
-  trackCount: number;
-  accentHue: number;
-  onClose: () => void;
-}) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
-
-  // Escape closes, and the body stops scrolling while open.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    // Focus the close button rather than the panel: it is the action a keyboard
-    // user most likely wants, and it makes the dismissal discoverable.
-    closeRef.current?.focus();
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [onClose]);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain p-4 sm:p-8"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${track.heading} booklet`}
-    >
-      {/* Backdrop. Blur plus a heavy dim: the field behind keeps moving, and
-          without the blur it competes with the paper for attention. */}
-      <div
-        className="fixed inset-0 animate-[fadeIn_260ms_ease-out] bg-black/78 backdrop-blur-md"
-        // A click on the backdrop dismisses, which is the expected affordance.
-        // aria-hidden + no button role: Escape and the X are the accessible
-        // paths, and a focusable backdrop would just be a trap.
-        aria-hidden="true"
-        onClick={onClose}
-      />
-
-      <div
-        ref={panelRef}
-        className="relative my-auto w-full max-w-[48rem]"
-        // Stops a click inside the paper from reaching the backdrop handler.
-        onClick={(e) => e.stopPropagation()}
+    <div className="m-auto w-full max-w-2xl">
+      <p
+        className="font-mono text-[10px] uppercase tracking-[0.28em]"
+        style={{ color: accent(70, 62, 0.9) }}
       >
-        <Booklet
-          disc={disc}
-          track={track}
-          trackNumber={trackNumber}
-          trackCount={trackCount}
-          accentHue={accentHue}
-        />
+        Start here
+      </p>
+      <h2 className="mt-3 text-[1.7rem] font-semibold leading-[1.15] tracking-tight text-white sm:text-[2.1rem]">
+        Pick a section.
+      </h2>
+      {/* Two phrasings. On a phone the deck sits below this block rather than
+          beside it, so "here" and "the player" would point at the wrong place
+          and at something not yet on screen. */}
+      <p className="mt-2.5 max-w-lg text-[15px] leading-relaxed text-zinc-400 sm:hidden">
+        Tap one to load its disc. It starts playing, and its cards open right
+        here.
+      </p>
+      <p className="mt-2.5 hidden max-w-lg text-[15px] leading-relaxed text-zinc-400 sm:block">
+        Each one loads a disc into the player, starts its song, and lays its
+        cards out here.
+      </p>
 
-        {/* Close control, top right of the paper. Sits above the page edge so it
-            reads as attached to the booklet rather than floating. */}
-        <button
-          ref={closeRef}
-          type="button"
-          onClick={onClose}
-          aria-label="Close booklet"
-          className="absolute right-3 top-3 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-black/15 bg-[#e4ddd0] text-[15px] leading-none text-[#3a352d] outline-none transition-colors hover:bg-[#d8cfbf] hover:text-black focus-visible:ring-2 focus-visible:ring-black/40 sm:right-5 sm:top-5"
-        >
-          <span aria-hidden="true">✕</span>
-        </button>
+      <div className="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {DISCS.map((d, i) => (
+          <button
+            key={d.id}
+            type="button"
+            onClick={() => onPick(i)}
+            onPointerEnter={() => onHoverDisc(i)}
+            onPointerLeave={() => onHoverDisc(null)}
+            onFocus={() => onHoverDisc(i)}
+            onBlur={() => onHoverDisc(null)}
+            className="group relative cursor-pointer overflow-hidden rounded-xl border p-4 text-left outline-none transition-all duration-200 hover:-translate-y-0.5 focus-visible:ring-2"
+            style={{
+              // Tinted by the section's own hue rather than the page accent, so
+              // the four read as four different things, and each card is the
+              // colour the disc it loads will turn the whole page.
+              borderColor: `hsl(${d.accent} 70% 60% / ${hoveredDisc === i ? 0.5 : 0.18})`,
+              background:
+                hoveredDisc === i
+                  ? `linear-gradient(180deg, hsl(${d.accent} 70% 55% / 0.12), hsl(${d.accent} 70% 55% / 0.04))`
+                  : "linear-gradient(180deg, rgb(255 255 255 / 0.04), rgb(255 255 255 / 0.015))",
+              ["--tw-ring-color" as string]: `hsl(${d.accent} 80% 65% / 0.8)`,
+            }}
+          >
+            {/* Accent hairline along the top edge, brightening on hover. */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 h-px transition-opacity duration-200"
+              style={{
+                background: `linear-gradient(90deg, transparent, hsl(${d.accent} 85% 65% / 0.85), transparent)`,
+                opacity: hoveredDisc === i ? 1 : 0.35,
+              }}
+            />
+
+            <div className="flex items-start gap-3">
+              {/* A small platter, so the card and the disc in the rack are
+                  visibly the same object. Same conic-gradient recipe as
+                  RackDisc, at a size where only the sheen needs to read. */}
+              <span
+                aria-hidden="true"
+                className="mt-0.5 block h-9 w-9 shrink-0 rounded-full transition-transform duration-200 group-hover:scale-110"
+                style={{
+                  background: `
+                    conic-gradient(from 210deg,
+                      hsl(${d.hueA} 70% 52%),
+                      hsl(${d.hueB} 72% 56%),
+                      hsl(${d.hueA} 65% 44%),
+                      hsl(${d.hueB} 70% 58%),
+                      hsl(${d.hueA} 70% 52%))
+                  `,
+                  boxShadow:
+                    "inset 0 0 0 1px rgb(255 255 255 / 0.25), 0 3px 8px rgb(0 0 0 / 0.5)",
+                }}
+              >
+                <span
+                  className="block h-full w-full rounded-full"
+                  style={{
+                    background:
+                      "radial-gradient(circle at 50% 50%, rgb(240 240 245) 0 22%, transparent 23%)",
+                  }}
+                />
+              </span>
+
+              <span className="min-w-0 flex-1">
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="text-[15.5px] font-semibold leading-tight text-white">
+                    {d.title}
+                  </span>
+                  <span className="shrink-0 font-mono text-[9.5px] uppercase tracking-[0.16em] text-zinc-400">
+                    {d.cards.length} card{d.cards.length === 1 ? "" : "s"}
+                  </span>
+                </span>
+                <span className="mt-1 block text-[13px] leading-snug text-zinc-400">
+                  {d.blurb}
+                </span>
+                {/* The song, named. It is half the point of the section, and
+                    naming it up front sets the expectation that clicking will
+                    start playing something. */}
+                <span className="mt-2 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em]">
+                  <span aria-hidden="true" style={{ color: `hsl(${d.accent} 80% 68%)` }}>
+                    ▶
+                  </span>
+                  <span className="min-w-0 truncate text-zinc-400">
+                    {d.song.title}
+                  </span>
+                </span>
+              </span>
+            </div>
+          </button>
+        ))}
       </div>
+
+      {/* Desktop only. Stacked on mobile this block sits above the deck and the
+          rack, so pointing at "the rack" would name something the visitor has
+          not scrolled to yet, and dragging is a mouse gesture regardless. */}
+      <p className="mt-5 hidden font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-400 lg:block">
+        Or drag a disc from the rack into the player
+      </p>
     </div>
   );
 }
 
 /**
- * The liner-notes booklet: one printed page per track.
+ * The card deck: a section's content as a small stack you flip through.
  *
- * Set on bone paper because it is the only warm, light surface on an otherwise
- * black page — the contrast is what makes the eye go to the content instead of
- * the hardware, and it gives the asymmetric layout a reason to exist beyond
- * "leftover space".
+ * Deliberately not a jewel case and not a modal. A case is furniture that
+ * frames content, and a modal makes reading a detour off the page. Both put a
+ * ceremony between the visitor and two paragraphs of text. Here the content is
+ * simply *there*, one card at a time, and Next/Prev turn it.
  *
- * Everything here is print furniture rather than web chrome: monospace credits,
- * hairline rules, numbered plates with captions, a catalogue number in the
- * corner. The accent hue is allowed in only as small marks (the rule above the
- * heading, link underlines), so the paper stays paper.
+ * The card is translucent over the live background rather than opaque: the
+ * reactive field is the page's whole identity, and a solid panel punches a hole
+ * in it. A backdrop blur plus a hairline border is enough to hold text legibly
+ * while the colour behind still reads through, so the card sits *in* the page
+ * instead of on top of it.
  */
-function Booklet({
+function CardDeck({
   disc,
-  track,
-  trackNumber,
-  trackCount,
+  index,
   accentHue,
+  onNext,
+  onPrev,
+  onSelect,
 }: {
   disc: Disc;
-  track: Track;
-  trackNumber: number;
-  trackCount: number;
+  index: number;
   accentHue: number;
+  onNext: () => void;
+  onPrev: () => void;
+  onSelect: (i: number) => void;
 }) {
+  const card = disc.cards[index];
+  const count = disc.cards.length;
   const accent = (s: number, l: number, a = 1) =>
     `hsl(${accentHue.toFixed(1)} ${s}% ${l}% / ${a})`;
 
-  const platesBlock =
-    track.plates && track.plates.length > 0 ? (
-      <div className="relative mt-9 space-y-8">
-        {track.plates.map((plate, i) => (
-          <figure key={plate.src}>
-            {/* Thin dark frame + inner hairline, the way a plate is mounted on a
-                page. The image itself carries no rounding: printed figures have
-                square corners. */}
-            <div
-              className={`border border-[#b9b1a2] bg-[#e4ddd0] p-[5px] ${
-                // An inset figure is centred at its own size instead of filling
-                // the measure, so the frame shrinks to fit the mark.
-                plate.inset ? "mx-auto w-fit" : ""
-              }`}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={plate.src}
-                width={plate.width}
-                height={plate.height}
-                alt={plate.alt}
-                loading="lazy"
-                decoding="async"
-                className={
-                  plate.inset
-                    ? // Capped at its intrinsic width so it is never upscaled,
-                      // and allowed to shrink on a narrow screen.
-                      "block h-auto max-w-full"
-                    : "block h-auto w-full"
-                }
-                style={
-                  plate.inset
-                    ? { width: `${plate.width}px`, maxWidth: "100%" }
-                    : undefined
-                }
-              />
-            </div>
-            <figcaption
-              className={`mt-2.5 flex gap-3 font-mono text-[10.5px] leading-relaxed text-[#6b655c] ${
-                plate.inset ? "justify-center" : ""
-              }`}
-            >
-              <span
-                className="shrink-0 uppercase tracking-[0.16em]"
-                style={{ color: accent(55, 38) }}
-              >
-                Plate {String(i + 1).padStart(2, "0")}
-              </span>
-              <span className="text-[#5c564d]">— {plate.caption}</span>
-            </figcaption>
-          </figure>
-        ))}
-      </div>
-    ) : null;
-
-  const creditsBlock =
-    track.credits && track.credits.length > 0 ? (
-      <div className="relative mt-9">
-        {/* Titled and boxed rather than a bare list of rows. Links are the one
-            thing on the page a visitor is actively hunting for, and as unlabelled
-            11px monospace they read as a colophon — something to skim past. The
-            heading names them, and the tinted panel makes the block findable
-            without scanning. */}
-        <div
-          className="border-t-2 pt-4"
-          style={{ borderColor: accent(60, 45) }}
-        >
-          <h2
-            className="mb-3 font-mono text-[10px] font-semibold uppercase tracking-[0.24em]"
-            style={{ color: accent(55, 34) }}
-          >
-            Links &amp; Credits
-          </h2>
-          {/* A dl keeps the role/value pairing semantic, and dt/dd stay direct
-              children of it — so the anchor goes inside the dd rather than
-              wrapping the pair, which would be invalid. The anchor is block-level
-              so the whole row is still one large target. */}
-          <dl className="space-y-1">
-            {track.credits.map((c) => (
-              <div key={c.role + c.value} className="flex gap-3">
-                <dt className="w-[6.5rem] shrink-0 pt-[7px] font-mono text-[10px] uppercase tracking-[0.16em] text-[#6b655c]">
-                  {c.role}
-                </dt>
-                <dd className="min-w-0 flex-1">
-                  {c.href ? (
-                    // Bumped to 14px semibold in the accent colour with an
-                    // arrow: a link has to look clickable at a glance, and at
-                    // 11px grey with a hairline underline it did not.
-                    <a
-                      href={c.href}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="-mx-2 flex items-baseline gap-1.5 rounded px-2 py-1.5 text-[14px] font-semibold break-words underline decoration-2 underline-offset-[3px] transition-colors hover:bg-[#e3dbcb] focus-visible:outline-2 focus-visible:outline-offset-2"
-                      style={{
-                        color: accent(60, 34),
-                        textDecorationColor: accent(70, 62),
-                        outlineColor: accent(60, 45),
-                      }}
-                    >
-                      <span className="min-w-0 break-words">{c.value}</span>
-                      <span aria-hidden="true" className="shrink-0 text-[11px]">
-                        ↗
-                      </span>
-                    </a>
-                  ) : (
-                    <span className="block py-1.5 font-mono text-[12px] text-[#2a2823]">
-                      {c.value}
-                    </span>
-                  )}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </div>
-    ) : null;
+  // Left/Right arrows flip the stack while focus is anywhere inside it, which
+  // is what a deck of cards implies. Scoped to this element rather than the
+  // document so it cannot fight the deck's own controls or a text selection
+  // elsewhere on the page.
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (count < 2) return;
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      onNext();
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      onPrev();
+    }
+  };
 
   return (
-    <article
-      className="booklet-page relative mx-auto w-full max-w-[46rem] animate-[bookletOpen_380ms_cubic-bezier(0.22,1,0.36,1)] px-7 py-9 text-[#1a1917] sm:px-12 sm:py-12"
-      style={{
-        // Bone, very slightly warm — not white, which reads as a browser
-        // default rather than stock.
-        background: "#efe9dd",
-        // The fold: a soft crease down the gutter edge where the page comes off
-        // the spine, plus a hairline of shadow so the paper has a thickness.
-        backgroundImage:
-          "linear-gradient(90deg, rgb(0 0 0 / 0.13) 0px, rgb(0 0 0 / 0.04) 7px, rgb(0 0 0 / 0) 22px)",
-        boxShadow:
-          "0 24px 60px -12px rgb(0 0 0 / 0.75), 0 2px 0 rgb(255 255 255 / 0.35) inset",
-      }}
+    <div
+      className="m-auto w-full max-w-2xl"
+      onKeyDown={onKeyDown}
+      role="group"
+      aria-roledescription="card deck"
+      aria-label={`${disc.title}: ${count} card${count === 1 ? "" : "s"}`}
     >
-      {/* Paper grain. A tiny inline SVG feTurbulence tiled by the browser —
-          no asset to ship, and it multiplies over the bone so the surface has
-          tooth instead of reading as flat #efe9dd fill. */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E\")",
-          opacity: 0.055,
-          mixBlendMode: "multiply",
-        }}
-      />
-
-      {/* --- masthead ---------------------------------------------------- */}
-      <header className="relative">
-        <div className="flex items-baseline justify-between gap-4 font-mono text-[10px] uppercase tracking-[0.24em] text-[#6b655c]">
-          <span>
-            {disc.title}
-            {trackCount > 1 && (
-              <>
-                <span className="mx-2 text-[#a8a196]">·</span>
-                Track {String(trackNumber).padStart(2, "0")} /{" "}
-                {String(trackCount).padStart(2, "0")}
-              </>
-            )}
-          </span>
-          {/* Catalogue number in the corner, as a printed insert carries it. */}
-          <span className="tabular-nums">{disc.catalog}</span>
-        </div>
-
-        {/* Accent rule — the one place the disc's colour touches the paper. */}
-        <div
-          className="mt-4 h-[2px] w-16"
-          style={{ background: accent(65, 45) }}
-        />
-
-        <h1 className="mt-5 text-[2rem] font-semibold leading-[1.1] tracking-tight text-[#12110f] sm:text-[2.6rem]">
-          {track.heading}
-        </h1>
-        {track.standfirst && (
-          <p className="mt-3 font-serif text-[17px] italic leading-snug text-[#4a453d]">
-            {track.standfirst}
-          </p>
-        )}
-        {/* The song this page is printed against — the booklet is per-track, so
-            naming the track ties the paper to what is audible. */}
-        <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#8a8377]">
-          Printed against &ldquo;{track.title}&rdquo;
-        </p>
-      </header>
-
-      <hr className="relative my-7 border-0 border-t border-[#c9c1b2]" />
-
-      {/* --- body ------------------------------------------------------- */}
-      {/* Serif at a generous measure: this is the one place on the page meant
-          for sustained reading, and it should not look like UI text. */}
-      <div className="relative space-y-4 font-serif text-[16.5px] leading-[1.72] text-[#26241f] [&_em]:italic [&_li]:mb-2 [&_strong]:font-semibold [&_strong]:text-[#12110f] [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5">
-        {track.body}
+      {/* Section header. The catalogue number ties this stack to the disc on
+          the spindle and the spine down the edge. */}
+      <div className="mb-4 flex items-baseline justify-between gap-4 font-mono text-[10px] uppercase tracking-[0.24em]">
+        <span style={{ color: accent(75, 66, 0.95) }}>{disc.title}</span>
+        <span className="text-zinc-400">{disc.catalog}</span>
       </div>
 
-      {/* --- credits, then plates --------------------------------------- */}
-      {/* Credits lead. The links are what a visitor is actually hunting for, and
-          below a full-width figure they sit past the fold on every panel — the
-          figures are supporting material and can follow. */}
-      {creditsBlock}
-      {platesBlock}
+      {/* The stack. Two dead layers peek out below the live card, so a
+          multi-card section looks like more than one thing before you touch it
+         , the affordance for flipping, without a label asking you to. They
+          are offset downward rather than up: the card's own height varies with
+          its content, and an upward offset would collide with the section
+          header above. A single-card section gets no fakes.
+          `-bottom-N` with `top-0` rather than a translate, because the live
+          card is in flow and the fakes must track its height. */}
+      <div className="relative">
+        {count > 1 && (
+          <>
+            <div
+              aria-hidden="true"
+              className="absolute inset-x-3 -bottom-2.5 top-0 rounded-2xl border border-white/[0.07] bg-white/[0.02]"
+            />
+            <div
+              aria-hidden="true"
+              className="absolute inset-x-1.5 -bottom-1.5 top-0 rounded-2xl border border-white/[0.09] bg-white/[0.03]"
+            />
+          </>
+        )}
 
-      {/* --- colophon --------------------------------------------------- */}
-      {trackCount > 1 && (
-        <p className="relative mt-9 font-mono text-[9.5px] uppercase tracking-[0.2em] text-[#a09889]">
-          Press Next on the deck for {disc.catalog} track{" "}
-          {String((trackNumber % trackCount) + 1).padStart(2, "0")}
-        </p>
+        {/* The live card. Keyed on the card id so React remounts it on a flip
+            and the entrance animation actually re-runs, without the key it is
+            the same element with new children, and nothing animates. */}
+        <article
+          key={card.id}
+          className="portfolio-card relative animate-[cardIn_320ms_cubic-bezier(0.22,1,0.36,1)] overflow-hidden rounded-2xl border px-6 py-6 backdrop-blur-md sm:px-8 sm:py-7"
+          style={{
+            // Barely-there fill: enough to separate the text from a busy patch
+            // of background without becoming a panel in its own right.
+            background:
+              "linear-gradient(180deg, rgb(255 255 255 / 0.055), rgb(255 255 255 / 0.025))",
+            borderColor: accent(60, 60, 0.22),
+            boxShadow: `0 18px 50px -20px rgb(0 0 0 / 0.8), inset 0 1px 0 rgb(255 255 255 / 0.07)`,
+          }}
+        >
+          {/* A single accent hairline along the top edge, the disc's colour
+              touching the card, and the only chrome it gets. */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-px"
+            style={{
+              background: `linear-gradient(90deg, transparent, ${accent(85, 65, 0.7)}, transparent)`,
+            }}
+          />
+
+          <header>
+            <div className="flex items-baseline justify-between gap-4">
+              {card.eyebrow ? (
+                <p className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-zinc-400">
+                  {card.eyebrow}
+                </p>
+              ) : (
+                <span />
+              )}
+              {/* Position in the stack, so flipping has a sense of where you
+                  are. Tabular so the digits do not jitter between cards. */}
+              {count > 1 && (
+                <p className="shrink-0 font-mono text-[10.5px] tabular-nums tracking-[0.16em] text-zinc-400">
+                  {String(index + 1).padStart(2, "0")} /{" "}
+                  {String(count).padStart(2, "0")}
+                </p>
+              )}
+            </div>
+
+            <h3 className="mt-2 text-[1.55rem] font-semibold leading-[1.15] tracking-tight text-white sm:text-[1.8rem]">
+              {card.heading}
+            </h3>
+
+            {card.standfirst && (
+              <p className="mt-2.5 font-serif text-[16px] italic leading-snug text-zinc-300/90">
+                {card.standfirst}
+              </p>
+            )}
+          </header>
+
+          {/* Body. A comfortable measure and real leading, this is the one
+              place on the page meant for actual reading. */}
+          <div className="mt-5 space-y-3.5 text-[15.5px] leading-[1.68] text-zinc-300 [&_em]:italic [&_li]:mb-1.5 [&_strong]:font-semibold [&_strong]:text-white [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5 [&_ul]:text-zinc-300/95">
+            {card.body}
+          </div>
+
+          {card.links && card.links.length > 0 && (
+            <dl className="mt-6 space-y-1 border-t border-white/10 pt-4">
+              {card.links.map((l) => (
+                <div key={l.role + l.value} className="flex gap-3">
+                  <dt className="w-[6.5rem] shrink-0 pt-[5px] font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-400">
+                    {l.role}
+                  </dt>
+                  <dd className="min-w-0 flex-1">
+                    {l.href ? (
+                      <a
+                        href={l.href}
+                        // mailto: hands off to a mail client rather than
+                        // navigating, so a new tab would either be left blank
+                        // or flash and close. Only real navigations open away.
+                        target={l.href.startsWith("mailto:") ? undefined : "_blank"}
+                        rel={
+                          l.href.startsWith("mailto:")
+                            ? undefined
+                            : "noreferrer noopener"
+                        }
+                        className="-mx-2 flex items-baseline gap-1.5 rounded px-2 py-1 text-[13.5px] font-medium break-words underline decoration-1 underline-offset-[3px] transition-colors hover:bg-white/[0.06] focus-visible:outline-2 focus-visible:outline-offset-2"
+                        style={{
+                          color: accent(85, 74),
+                          textDecorationColor: accent(80, 60, 0.6),
+                          outlineColor: accent(85, 65),
+                        }}
+                      >
+                        <span className="min-w-0 break-words">{l.value}</span>
+                        {/* Three destinations, three marks: a document we serve
+                            ourselves, an address that opens a mail client, and
+                            somewhere else on the web. They do different things
+                            and should not look identical. */}
+                        <span aria-hidden="true" className="shrink-0 text-[10px]">
+                          {l.href.startsWith("/")
+                            ? "⤓"
+                            : l.href.startsWith("mailto:")
+                              ? "✉"
+                              : "↗"}
+                        </span>
+                      </a>
+                    ) : (
+                      <span className="block py-1 font-mono text-[12.5px] text-zinc-400">
+                        {l.value}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          {card.figures && card.figures.length > 0 && (
+            <div className="mt-6 space-y-5">
+              {card.figures.map((fig) => (
+                <figure key={fig.src}>
+                  <div
+                    className={`overflow-hidden rounded-lg border border-white/10 bg-black/25 ${
+                      // An inset mark is centred at its own size instead of
+                      // filling the measure, so a 200px logo is never upscaled.
+                      fig.inset ? "mx-auto w-fit p-3" : ""
+                    }`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={fig.src}
+                      width={fig.width}
+                      height={fig.height}
+                      alt={fig.alt}
+                      loading="lazy"
+                      decoding="async"
+                      className={
+                        fig.inset
+                          ? "block h-auto max-w-full rounded"
+                          : "block h-auto w-full"
+                      }
+                      style={
+                        fig.inset
+                          ? {
+                              width: `${fig.maxWidth ?? fig.width}px`,
+                              maxWidth: "100%",
+                            }
+                          : undefined
+                      }
+                    />
+                  </div>
+                  {fig.caption && (
+                    <figcaption
+                      className={`mt-2 font-mono text-[10.5px] leading-relaxed text-zinc-400 ${
+                        fig.inset ? "text-center" : ""
+                      }`}
+                    >
+                      {fig.caption}
+                    </figcaption>
+                  )}
+                </figure>
+              ))}
+            </div>
+          )}
+        </article>
+      </div>
+
+      {/* Flip controls. These duplicate the deck's Next/Prev on purpose: the
+          fascia buttons are across the page and easy to miss, and a stack of
+          cards should be turnable where your eyes already are. */}
+      {count > 1 && (
+        <div className="mt-5 flex items-center justify-between gap-4">
+          <FlipButton
+            direction="prev"
+            accentHue={accentHue}
+            onClick={onPrev}
+            label="Previous card"
+          />
+
+          {/* Dots. Each is a real button, so a specific card is one click away
+              rather than several flips. */}
+          <div className="flex items-center gap-2">
+            {disc.cards.map((c, i) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => onSelect(i)}
+                aria-label={`Card ${i + 1}: ${c.heading}`}
+                aria-current={i === index ? "true" : undefined}
+                // 44px hit area on touch, 24px on desktop. The visible dot
+                // inside stays the same size either way; only the tappable box
+                // around it grows, so the row does not look chunky on a phone.
+                className="group grid h-11 w-11 cursor-pointer place-items-center rounded-full outline-none focus-visible:ring-2 sm:h-6 sm:w-6"
+                style={{ ["--tw-ring-color" as string]: accent(85, 65, 0.7) }}
+              >
+                <span
+                  className="block rounded-full transition-all duration-200"
+                  style={
+                    i === index
+                      ? {
+                          width: "18px",
+                          height: "5px",
+                          background: accent(85, 66),
+                        }
+                      : {
+                          width: "5px",
+                          height: "5px",
+                          background: "rgb(255 255 255 / 0.28)",
+                        }
+                  }
+                />
+              </button>
+            ))}
+          </div>
+
+          <FlipButton
+            direction="next"
+            accentHue={accentHue}
+            onClick={onNext}
+            label="Next card"
+          />
+        </div>
       )}
-    </article>
+    </div>
+  );
+}
+
+/** One of the deck's own flip controls. Text, not an icon-only button. */
+function FlipButton({
+  direction,
+  accentHue,
+  onClick,
+  label,
+}: {
+  direction: "prev" | "next";
+  accentHue: number;
+  onClick: () => void;
+  label: string;
+}) {
+  const accent = (s: number, l: number, a = 1) =>
+    `hsl(${accentHue.toFixed(1)} ${s}% ${l}% / ${a})`;
+  const glyph = direction === "prev" ? "←" : "→";
+  const text = direction === "prev" ? "Prev" : "Next";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      // min-h-11 (44px) on phones: this is the primary way to page through a
+      // section on touch, and at the desktop's 30px it was under the minimum
+      // target size. Desktop keeps the smaller pill.
+      className="flex min-h-11 shrink-0 cursor-pointer items-center gap-2 rounded-full border px-4 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-zinc-400 outline-none transition-colors hover:bg-white/[0.07] hover:text-white focus-visible:ring-2 active:bg-white/[0.06] sm:min-h-0 sm:px-3.5"
+      style={{
+        // 0.14 vanished against the moving backdrop, which made Prev read as
+        // plain text rather than a button. Also a faint fill, so the pill has
+        // a body of its own over a busy patch of background.
+        borderColor: "rgb(255 255 255 / 0.22)",
+        background: "rgb(255 255 255 / 0.04)",
+        ["--tw-ring-color" as string]: accent(85, 65, 0.7),
+      }}
+    >
+      {direction === "prev" && <span aria-hidden="true">{glyph}</span>}
+      <span>{text}</span>
+      {direction === "next" && <span aria-hidden="true">{glyph}</span>}
+    </button>
   );
 }
 
@@ -2236,7 +2345,7 @@ function formatTime(seconds: number): string {
 /**
  * The deck's readout: what is playing, how far in, and a progress line.
  *
- * Purely presentational — it reports state and offers no controls, because the
+ * Purely presentational: it reports state and offers no controls, because the
  * transport already lives on the modelled fascia and a second set of buttons
  * would split the metaphor. The progress line is not seekable for the same
  * reason: a real deck of this vintage has no scrub.
@@ -2244,8 +2353,6 @@ function formatTime(seconds: number): string {
 function TransportBar({
   title,
   discTitle,
-  trackNumber,
-  trackCount,
   elapsed,
   duration,
   playing,
@@ -2253,8 +2360,6 @@ function TransportBar({
 }: {
   title: string | null;
   discTitle: string | null;
-  trackNumber: number;
-  trackCount: number;
   elapsed: number;
   duration: number;
   playing: boolean;
@@ -2267,27 +2372,20 @@ function TransportBar({
   return (
     <div className="w-full max-w-[640px]">
       <div className="flex items-baseline justify-between gap-4 font-mono text-[11px]">
-        {/* Track name. Raised well above the old 20%-opacity labels: this sits
-            over a moving field and has to stay readable. */}
+        {/* Song name. Raised well above the old 20%-opacity labels: this sits
+            over a moving field and has to stay readable. One song per disc, so
+            there is no track number to print, the disc's own title carries
+            the position instead. */}
         <div className="min-w-0 flex-1 truncate">
           {title ? (
             <>
-              <span
-                className="tabular-nums"
-                style={{ color: accent(70, 62, 0.9) }}
-              >
-                {trackCount > 1
-                  ? `${String(trackNumber).padStart(2, "0")}`
-                  : "01"}
-              </span>
-              <span className="mx-2 text-zinc-600">·</span>
               <span className="text-zinc-200">{title}</span>
               {discTitle && (
-                <span className="ml-2 text-zinc-500">— {discTitle}</span>
+                <span className="ml-2 text-zinc-400">/ {discTitle}</span>
               )}
             </>
           ) : (
-            <span className="uppercase tracking-[0.18em] text-zinc-500">
+            <span className="uppercase tracking-[0.18em] text-zinc-400">
               No disc loaded
             </span>
           )}
@@ -2297,7 +2395,7 @@ function TransportBar({
         </div>
       </div>
 
-      {/* Progress line. A 1px rule that fills — the thinnest thing that still
+      {/* Progress line. A 1px rule that fills, the thinnest thing that still
           reads as a transport. */}
       <div
         className="relative mt-2 h-px w-full overflow-hidden rounded-full bg-white/10"
@@ -2334,19 +2432,29 @@ function RackDisc({
   loaded,
   spinning,
   dragging,
+  highlighted,
   floatDelay,
   onClick,
+  onPointerEnter,
+  onPointerLeave,
   onDragStart,
   onDragEnd,
 }: {
   disc: Disc;
   loaded: boolean;
-  /** The deck is playing this disc — the platter turns to match. */
+  /** The deck is playing this disc, the platter turns to match. */
   spinning: boolean;
   dragging: boolean;
+  /**
+   * This disc's section is hovered elsewhere on the page (the empty-state
+   * picker). Lifts and rings it, so the two are visibly one thing.
+   */
+  highlighted: boolean;
   /** Seconds of negative delay, so each disc sits at a different phase. */
   floatDelay: number;
   onClick: () => void;
+  onPointerEnter: () => void;
+  onPointerLeave: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
 }) {
@@ -2355,6 +2463,8 @@ function RackDisc({
       type="button"
       draggable
       onClick={onClick}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
       onDragStart={(e) => {
         // The id is the payload; the deck looks it up in DISCS on drop.
         e.dataTransfer.setData("text/x-disc-id", disc.id);
@@ -2367,17 +2477,32 @@ function RackDisc({
       onDragEnd={onDragEnd}
       aria-pressed={loaded}
       // The visible label is a terse code ("PROJ"), so name the button
-      // explicitly — otherwise that code is all a screen reader announces.
-      aria-label={`${disc.title} disc — drag into the deck or click to load`}
-      title={`${disc.title} — drag into the deck or click to load`}
+      // explicitly, otherwise that code is all a screen reader announces.
+      aria-label={`${disc.title} disc: drag into the deck or click to load`}
+      title={`${disc.title}: drag into the deck or click to load`}
       className={`group relative h-[88px] w-[88px] shrink-0 rounded-full transition-transform duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${
-        dragging ? "scale-90 opacity-40" : "hover:-translate-y-1 hover:scale-105"
-      } ${loaded ? "ring-2 ring-cyan-400/70" : ""}`}
-      style={{ cursor: dragging ? "grabbing" : "grab" }}
+        dragging
+          ? "scale-90 opacity-40"
+          : highlighted
+            ? "-translate-y-1.5 scale-110"
+            : "hover:-translate-y-1 hover:scale-105"
+      }`}
+      style={{
+        cursor: dragging ? "grabbing" : "grab",
+        // Ringed in the disc's own hue rather than a fixed cyan, so the rack
+        // agrees with the picker card and the page accent. `loaded` wins over
+        // `highlighted`: what is in the deck matters more than what a pointer
+        // is passing over.
+        boxShadow: loaded
+          ? `0 0 0 2px hsl(${disc.accent} 85% 62% / 0.8)`
+          : highlighted
+            ? `0 0 0 2px hsl(${disc.accent} 85% 65% / 0.55), 0 0 22px 2px hsl(${disc.accent} 90% 60% / 0.35)`
+            : undefined,
+      }}
     >
       {/* Everything visual floats inside this wrapper rather than on the button
           itself. Animating the button would leave the hit target in perpetual
-          motion — which is not just a mouse annoyance: an element that never
+          motion, which is not just a mouse annoyance: an element that never
           settles never becomes "stable", so automated clicks (Playwright, and
           tooling that waits on settled layout) time out against it. The button
           keeps a fixed box; only the pixels move. */}
@@ -2391,7 +2516,7 @@ function RackDisc({
       >
         {/* Iridescent platter. The conic gradient is the rainbow sweep; the
             repeating radial is the data-track banding. Spins while this disc is
-            the one playing — the conic gradient makes the rotation legible.
+            the one playing, the conic gradient makes the rotation legible.
             The spin is a separate element from the float because both are
             transforms, and one element can only carry one. */}
         <span
@@ -2453,7 +2578,7 @@ function RackDisc({
  * the button face; this supplies the accessible name, keyboard focus, the
  * pointer target and a printed label.
  *
- * `glyph` is drawn over the cap so the control is identifiable at a glance —
+ * `glyph` is drawn over the cap so the control is identifiable at a glance,
  * a bare chrome rectangle gives the user nothing to read. It's rendered with a
  * dark text shadow because the caps are light chrome.
  */
@@ -2497,5 +2622,92 @@ function FasciaButton({
         </span>
       )}
     </button>
+  );
+}
+
+/**
+ * The phone transport: the deck's playback actions as real buttons.
+ *
+ * The modelled fascia caps are pinned over the 3D deck as percentages, which
+ * works at desktop size and fails on a phone, where the deck is 320px tall and
+ * each cap lands around 20x40px on a canvas a thumb cannot aim at. These are
+ * 48px, in document flow, and hidden from sm up so the desktop keeps its
+ * physical controls.
+ *
+ * Playback only. Flipping cards is deliberately NOT duplicated here: the card
+ * deck renders its own Prev/Next and dots directly beneath the card, which is
+ * where the thumb already is, and two controls sharing one label on a single
+ * screen is worse than either alone.
+ *
+ * Play is larger and filled because with a disc loaded and stopped it is the
+ * one thing to press, and a phone has no hover state to hint at that.
+ */
+function TouchTransport({
+  playing,
+  hasDisc,
+  accentHue,
+  onPlayPause,
+  onStop,
+  onEject,
+}: {
+  playing: boolean;
+  hasDisc: boolean;
+  accentHue: number;
+  onPlayPause: () => void;
+  onStop: () => void;
+  onEject: () => void;
+}) {
+  const accent = (s: number, l: number, a = 1) =>
+    `hsl(${accentHue.toFixed(1)} ${s}% ${l}% / ${a})`;
+
+  // Nothing loaded means nothing to transport, and a row of dead buttons above
+  // the picker would just be noise.
+  if (!hasDisc) return null;
+
+  const ghost =
+    "flex h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-300 transition-colors active:bg-white/[0.06]";
+
+  return (
+    <div
+      className="flex w-full max-w-[640px] items-stretch gap-2 sm:hidden"
+      role="group"
+      aria-label="Player controls"
+    >
+      {/* Play/Pause: the primary action, so it takes the most width. */}
+      <button
+        type="button"
+        onClick={onPlayPause}
+        aria-label={playing ? "Pause" : "Play"}
+        className="flex h-12 flex-[2] cursor-pointer items-center justify-center gap-2 rounded-xl text-[12px] font-bold uppercase tracking-[0.12em] text-zinc-950 transition-transform active:scale-[0.97]"
+        style={{ background: accent(85, 66) }}
+      >
+        <span aria-hidden="true" className="text-[13px]">
+          {playing ? "❚❚" : "▶"}
+        </span>
+        <span>{playing ? "Pause" : "Play"}</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={onStop}
+        aria-label="Stop"
+        className={ghost}
+        style={{ borderColor: "rgb(255 255 255 / 0.14)" }}
+      >
+        <span aria-hidden="true">{"■"}</span>
+        <span>Stop</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={onEject}
+        aria-label="Eject disc"
+        className={ghost}
+        style={{ borderColor: "rgb(255 255 255 / 0.14)" }}
+      >
+        <span aria-hidden="true">{"⏏"}</span>
+        <span>Eject</span>
+      </button>
+    </div>
   );
 }

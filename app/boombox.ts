@@ -9,7 +9,7 @@ import * as THREE from "three";
 
    Built from primitives (lathe / torus / extruded rounded shapes) so the deck
    ships without a model file. Every geometry and material is registered with
-   a Disposables instance — per the Next 16 WebGL guide, renderer disposal does
+   a Disposables instance, per the Next 16 WebGL guide, renderer disposal does
    not cascade to scene contents.
    ========================================================================= */
 
@@ -74,7 +74,7 @@ function createMaterials(d: Disposables) {
     }),
   );
 
-  // Speaker cone paper — mid grey, almost no specular.
+  // Speaker cone paper, mid grey, almost no specular.
   const cone = d.track(
     new THREE.MeshStandardMaterial({
       color: 0x8f959d,
@@ -91,7 +91,7 @@ function createMaterials(d: Disposables) {
     }),
   );
 
-  // Glossy CD lid — near-black with a strong mirror term.
+  // Glossy CD lid, near-black with a strong mirror term.
   const lid = d.track(
     new THREE.MeshPhysicalMaterial({
       color: 0x070809,
@@ -213,7 +213,7 @@ function bodyShell(d: Disposables, mat: THREE.Material) {
   const geo = d.track(new THREE.LatheGeometry(points, 72));
   const mesh = new THREE.Mesh(geo, mat);
   // Stretch into the wide, shallow oval of the reference photo. The Y scale is
-  // deliberately low — the reference body is much wider than it is tall, and a
+  // deliberately low: the reference body is much wider than it is tall, and a
   // taller value domes it into a mound.
   mesh.scale.set(1.72, 0.72, 0.62);
   return mesh;
@@ -231,7 +231,7 @@ function knob(d: Disposables, mats: BoomboxMaterials, radius: number) {
   );
   group.add(new THREE.Mesh(bodyGeo, mats.chrome));
 
-  // Knurling — instanced so 36 ridges cost one draw call.
+  // Knurling, instanced so 36 ridges cost one draw call.
   const ridgeGeo = d.track(
     new THREE.BoxGeometry(radius * 0.075, radius * 0.64, radius * 0.1),
   );
@@ -267,7 +267,7 @@ function knob(d: Disposables, mats: BoomboxMaterials, radius: number) {
  * One speaker: outer silver ring, bezel, rubber surround, cone, dust cap.
  *
  * Returns the group plus the two parts that move. Only the cone and dust cap
- * travel — the ring, bezel and surround are bolted to the cabinet on a real
+ * travel; the ring, bezel and surround are bolted to the cabinet on a real
  * driver, and pumping the whole assembly reads as the speaker falling out.
  */
 function speaker(d: Disposables, mats: BoomboxMaterials, radius: number) {
@@ -292,7 +292,7 @@ function speaker(d: Disposables, mats: BoomboxMaterials, radius: number) {
   surround.position.z = -radius * 0.04;
   group.add(surround);
 
-  // Cone — a shallow open dish facing the viewer.
+  // Cone, a shallow open dish facing the viewer.
   const coneGeo = d.track(
     new THREE.ConeGeometry(radius * 0.64, radius * 0.4, 48, 1, true),
   );
@@ -328,7 +328,7 @@ export type BoomboxRig = {
   root: THREE.Group;
   /** Both drivers' moving parts, for bass-driven excursion. */
   woofers: WooferParts[];
-  /** Hinged CD lid — rotates open on eject. */
+  /** Hinged CD lid, rotates open on eject. */
   lid: THREE.Group;
   /** Mount point for the spinning disc, inside the lid well. */
   discMount: THREE.Group;
@@ -361,7 +361,7 @@ export function buildBoombox(d: Disposables): BoomboxRig {
 
   /* --- speakers --------------------------------------------------------- */
   // The moving parts are collected so the render loop can drive them from the
-  // bass level — see BoomboxRig.woofers.
+  // bass level, see BoomboxRig.woofers.
   const woofers: WooferParts[] = [];
   for (const side of [-1, 1]) {
     const sp = speaker(d, mats, 0.54);
@@ -378,7 +378,7 @@ export function buildBoombox(d: Disposables): BoomboxRig {
   consolePanel.position.set(0, -0.06, 0.68);
   root.add(consolePanel);
 
-  // LCD window — recessed dark frame with an emissive face.
+  // LCD window, recessed dark frame with an emissive face.
   const lcdFrame = new THREE.Mesh(
     roundedBox(d, 0.48, 0.32, 0.06, 0.03),
     mats.shellMatte,
@@ -472,7 +472,7 @@ export function buildBoombox(d: Disposables): BoomboxRig {
   lid.position.set(0, DECK_Y + 0.01, -0.44);
 
   // A CylinderGeometry's axis is already +Y, so an unrotated cylinder is a flat
-  // disc lying on the deck — which is what the lid is. Do NOT rotate it.
+  // disc lying on the deck, which is what the lid is. Do NOT rotate it.
   const lidGeo = d.track(new THREE.CylinderGeometry(0.72, 0.76, 0.06, 64));
   const lidMesh = new THREE.Mesh(lidGeo, mats.lid);
   lidMesh.name = "cdLid";
@@ -507,7 +507,7 @@ export function buildBoombox(d: Disposables): BoomboxRig {
   /* --- carry handle ----------------------------------------------------- */
   // A half-torus arch standing upright over the deck. TorusGeometry sweeps its
   // arc in the XY plane starting at +X, so a 0..PI arc is already the upper
-  // half — no rotation, or it lies flat and reads as an ellipse behind the body.
+  // half, with no rotation, or it lies flat and reads as an ellipse behind the body.
   const HANDLE_R = 0.92;
   const HANDLE_Y = DECK_Y - 0.02;
   const handleGeo = d.track(

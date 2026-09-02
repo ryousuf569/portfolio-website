@@ -35,13 +35,13 @@ export type CaseHandle = {
 
 type CaseSpec = {
   title: string;
-  /** Small line above the title — catalogue number and track position. */
+  /** Small line above the title, catalogue number and track position. */
   eyebrow: string;
   /** Cover artwork URL, or null for a type-only cover. */
   cover: string | null;
   /**
    * How the artwork fills the cover. "cover" crops to fill, which is right for
-   * photographs. "contain" fits the whole image inside the frame — necessary for
+   * photographs. "contain" fits the whole image inside the frame, necessary for
    * a logo, where cropping the mark's edges or upscaling a small square to fill
    * a landscape frame both look like mistakes.
    */
@@ -110,7 +110,7 @@ function paintCover(
   ctx.fillStyle = `hsl(${spec.accentHue} 75% 58%)`;
   ctx.fillRect(pad, h - Math.round(h * 0.3), Math.round(w * 0.11), 4);
 
-  // Eyebrow — catalogue number, letterspaced by hand since canvas has no
+  // Eyebrow, catalogue number, letterspaced by hand since canvas has no
   // letter-spacing property in older engines.
   ctx.fillStyle = "rgba(228,232,240,0.72)";
   ctx.font = `500 ${Math.round(w * 0.026)}px ui-monospace, "SFMono-Regular", Menlo, monospace`;
@@ -180,9 +180,9 @@ function paintSpine(ctx: CanvasRenderingContext2D, spec: CaseSpec) {
  * The studio environment every case reflects, built once and shared.
  *
  * Previously each case ran its own PMREMGenerator over a procedural sky scene.
- * That convolution is the single most expensive thing in case setup, it produced
+ * That convolution is the single most expensive thing in case setup; it produced
  * a byte-identical result every time, and it ran once per case on every disc
- * switch — four cases meant four redundant convolutions before anything drew.
+ * switch, four cases meant four redundant convolutions before anything drew.
  *
  * A PMREM render target belongs to the renderer that produced it, so it cannot
  * be shared between contexts. This is plain CPU-side pixel data instead: an
@@ -308,7 +308,7 @@ export function createCase(
 
   /* --- environment ----------------------------------------------------- */
   // Clear plastic needs something to reflect, same reasoning as the deck.
-  // Shared across every case — see buildEnvTexture.
+  // Shared across every case, see buildEnvTexture.
   scene.environment = getEnvTexture();
 
   const key = new THREE.DirectionalLight(0xffffff, 2.1);
@@ -341,7 +341,7 @@ export function createCase(
   // Detaches the pending load listener if this case unmounts mid-flight.
   let coverCleanup: (() => void) | null = null;
   // An animated cover has to be repainted every frame, because drawImage of an
-  // <img> only ever samples whatever frame the browser is currently showing —
+  // <img> only ever samples whatever frame the browser is currently showing,
   // painting once would freeze it. Detected by extension rather than by decoding
   // the file: this only decides whether to re-upload the texture each frame.
   const coverAnimated = /\.gif($|\?)/i.test(spec.cover ?? "");
@@ -474,7 +474,7 @@ export function createCase(
 
     // Animated cover: re-sample the <img> so the case shows the moving artwork
     // rather than the single frame that happened to be current when it loaded.
-    // Throttled to ~12fps — GIFs rarely run faster, and a full canvas repaint
+    // Throttled to ~12fps, GIFs rarely run faster, and a full canvas repaint
     // plus texture upload every rAF tick is a lot of bandwidth for artwork the
     // size of a thumbnail.
     if (coverAnimated && coverImg && !reduceMotion) {
@@ -538,7 +538,7 @@ export function createCase(
       // The environment texture is intentionally NOT disposed: it is shared by
       // every case and outlives any one of them.
       renderer.dispose();
-      // Required as of Next 16 — dispose() alone does not release the context
+      // Required as of Next 16: dispose() alone does not release the context
       // across the App Router's remount cycle, and browsers cap live contexts.
       renderer.forceContextLoss();
       canvas.remove();
